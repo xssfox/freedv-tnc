@@ -16,7 +16,7 @@ Limited testing has been performed.
 
 Credits
 --
-David Rowe and the FreeDV team for developing the modem abd libraries 
+David Rowe and the FreeDV team for developing the modem and libraries 
 
 Warnings
 --
@@ -24,7 +24,7 @@ FreeDV library is expecting a sample rate of 8000 however most radios and soundc
 
 As we use PTS/PTY for serial emulation for better support with software this software will only run on Linux at the moment. In theory it can be adapted to run on macos or Windows using a TCP server instead.
 
-Testing needs to be done on long runs of 0x00's
+Testing needs to be done on long runs of 0x00's - maybe scrambling is required?
 
 The freedv modem currently seems to require a long amount of time to gain sync. To combat this a large amount of preamble is added - this means that this configuration will prefer longer frames rather than lots of short ones.
 
