@@ -287,6 +287,7 @@ while 1:
         preamble = True
         to_send = data_to_send[:MAX_PACKETS_ONE_TX]
         del data_to_send[:MAX_PACKETS_ONE_TX]
+        stream_out.start_stream()
         for packet in to_send:
             frames = build_frames(packet, preamble)
             preamble = False
@@ -294,6 +295,7 @@ while 1:
                 #print(f"sending {bytes(bytes_in)}")
                 c_lib.freedv_rawdatatx(freedv,mod_out,bytes_in) #encode
                 stream_out.write(bytes(bytearray(mod_out))) # write to sound card
+        stream_out.stop_stream()
         rigctl.key_up()
         stream_in.start_stream() # restart rx audio
         clear_for = -CLEAR_FOR*3 # set this to a negative number so it takes awhile before to give the next station a chance
