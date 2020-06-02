@@ -30,7 +30,6 @@ The freedv modem currently seems to require a long amount of time to gain sync. 
 
 I've added a small amount of basic flow control (max packets to send before requiring waiting for a little bit). I'm not sure if it's meant to be the TNCs job to do this flow control considering higher layers also do it - though most assume you can do full duplex.
 
-At the moment I'm ignoring freedv_nin which means if the clocks are out by a lot there might be issues with retaining sync...
 
 Configuration
 --
