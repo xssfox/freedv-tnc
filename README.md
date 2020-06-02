@@ -62,3 +62,21 @@ For example with tncattach:
 ```
 sudo tncattach /dev/pts/22 115200 --mtu 1400 -v
 ```
+
+Installing rigctld
+--
+```
+apt-get install libhamlib-utils libhamlib-dev
+```
+
+Installing tncattach
+--
+more here: https://unsigned.io/ethernet-and-ip-over-packet-radio-tncs/
+```
+git clone https://github.com/markqvist/tncattach.gitA
+cd tncattach
+make
+make install
+```
+
+
