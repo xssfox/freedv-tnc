@@ -20,7 +20,7 @@ David Rowe and the FreeDV team for developing the modem and libraries
 
 Warnings
 --
-FreeDV library is expecting a sample rate of 8000 however most radios and soundcards won't support this. In my testing I was using pulseaudio and it has a built in sample rate conversion.
+FreeDV library is expecting a sample rate of 8000 however most radios and soundcards won't support this. In my testing I was using pulseaudio and it has a built in sample rate conversion. On my debian machine I was also able to use `samplerate` as the audio device - your milage may vary.
 
 As we use PTS/PTY for serial emulation for better support with software this software will only run on Linux at the moment. In theory it can be adapted to run on macos or Windows using a TCP server instead.
 
@@ -37,10 +37,14 @@ Configuration
 
 An ICOM IC-7100 was used for testing but other rigs that support SSB should work fine.
 
+### Install dependencies
 ```
 sudo apt-get install portaudio19-dev
 pip3 install pyaudio kissfix kiss # TODO kissfix shouldn't depend on kiss but does.
+```
 
+### Install Codec2
+```
 git clone https://github.com/drowe67/codec2.git
 cd codec2
 mkdir build_linux
@@ -49,11 +53,29 @@ cmake ../
 make
 ```
 
-Update `libname` in `TNC-freedc.py` to point towards your `build_linux/src/libcodec2.so`
+Update `libname` in `TNC-freedc.py` to point towards your `build_linux/src/libcodec2.so` - also update the sound device configuration.
 
+
+### Installing rigctld
+Rigctl is used to key the radio when transmitting.
 ```
-rigctld -m 370 -vvvvvv -r /dev/ttyUSB0 # Start rigctld. If your RX only you can use -m 1 for the dummy interface
-python3 TNC-freedv.py 
+apt-get install libhamlib-utils libhamlib-dev
+```
+
+### Installing tncattach (optional)
+tncattach is used here as a test, however you can use any KISS software with this modem.
+more here: https://unsigned.io/ethernet-and-ip-over-packet-radio-tncs/
+```
+git clone https://github.com/markqvist/tncattach.gitA
+cd tncattach
+make
+make install
+```
+
+### Starting the TNC
+```
+rigctld -m 370 -r /dev/ttyUSB0 & # Start rigctld and background. If your RX only you can use -m 1 for the dummy interface
+python3 TNC-freedv.py &
 ```
 
 The program should then say `Our PTY is /dev/pts/22`. This is the serial port you can use in your applications as a TNC
