@@ -98,10 +98,10 @@ max_sample = len(mod_in_type())*sizeof(c_short)  # short == 2 bytes
 
 k = kissfix.SerialKISS('/dev/ptmx', 9600)
 k.start()
-master, slave = pty.openpty()
-print(f'Our PTY is {os.ttyname(slave)}')
-k.interface.fd = master # we need to override the the serial port with the fd from pty
-tty.setraw(master, termios.TCSANOW)
+control, user_port = pty.openpty()
+print(f'Our PTY is {os.ttyname(user_port)}')
+k.interface.fd = control # we need to override the the serial port with the fd from pty
+tty.setraw(control, termios.TCSANOW)
 
 # our packet simple is a preamble, followed by expected length and then the data
 # we also stick a tail on the end because foxes.
@@ -264,7 +264,7 @@ while 1:
                 packet_out = bytes(packet_out)
                 print(f'RX: {packet_out.hex()}')
                 frame = kissfix.FEND + b'\0F' + kissfix.escape_special_codes(packet_out) + kissfix.FEND
-                os.write(master, frame)
+                os.write(control, frame)
                 bytes_remaining = 0
                 packet_out = bytearray()
                 last_frame_was_preamble = False #reset state if we loose sync because we've lost the packet
