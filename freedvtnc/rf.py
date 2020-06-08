@@ -23,6 +23,13 @@ class rx_state(Enum): # might make a proper state machine later
     SYNC =  2
     RECEIVE = 3
 
+def list_audio_devices() -> list:
+    p = pyaudio.PyAudio()
+    devices = []
+    for x in range(0, p.get_device_count()):
+        devices.append(p.get_device_info_by_index(x)["name"])
+    return devices
+
 class Rf():
     def __init__(self, 
                     modem,
@@ -32,7 +39,7 @@ class Rf():
                     audio_sample_rate=48000,
                     modem_sample_rate=8000,
                     max_packet_size=2047,
-                    preamble_frame_count=3,
+                    preamble_frame_count=5,
                     postamble_frame_count=1,
                     rig=None,
                     post_tx_wait=5
@@ -93,6 +100,9 @@ class Rf():
 
         frame = self.modem.demodulate(audio_sample)
         if audio_sample == len(audio_sample) * b'\x00': #don't demodulate silence as that breaks the freedv modem
+            if self.rx_locked == True:
+                self.rx_locked = False
+                self.lock.release()       
             return
         
         
@@ -126,6 +136,7 @@ class Rf():
                 self.state = rx_state.SEARCH
                 logging.debug("RX STATE -> SEARCH: Reached end of packet")
                 logging.info(f"RXed Packet: {self.packet_data}")
+                logging.info(f"RXed Packet HEX: {self.packet_data.hex()}")
                 self.callback(self.packet_data)
         
         if frame.sync == False and self.rx_locked == True:
@@ -148,7 +159,8 @@ class Rf():
         frames.extend([self.preamble] * (self.preamble_frame_count - 1)) #each packet will start with a preamble so we can exclude it from the long start preamble
 
         for packet in packets:
-            logging.info(f"TXing packet: {packet.hex()}")
+            logging.info(f"TXing packet: {packet}")
+            logging.info(f"TXing packet HEX: {packet.hex()}")
             frames.append(self.preamble)
             header = len(packet).to_bytes(2, byteorder='big', signed=False) +  packet[:self.modem.bytes_per_frame-2]
             frames.append(header)
@@ -181,5 +193,5 @@ class Rf():
             self.rig.ptt_disable()
         self.stream_tx.stop_stream()
         self.lock.release()
-        time.sleep(self.post_tx_wait + (random.random()*3)) # add a random amount of 3 seconds as a back off
+        time.sleep(self.post_tx_wait + (random.random()*2)) # add a random amount of 2 seconds as a back off
         self.tx_lock.release()

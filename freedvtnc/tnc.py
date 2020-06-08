@@ -24,7 +24,7 @@ class KissInterface():
         self.rx_thread.start()
     
     def tx(self, bytes_in: bytes):
-        frame = kissfix.FEND + b'\0F' + kissfix.escape_special_codes(bytes_in) + kissfix.FEND
+        frame = kissfix.FEND + b'\00' + kissfix.escape_special_codes(bytes_in) + kissfix.FEND
         os.write(self.control, frame)
 
 class KissThread(threading.Thread):
@@ -37,7 +37,7 @@ class KissThread(threading.Thread):
         while self._running == True:
             # check TNC port
             for frame in self.interface.read(readmode=False):
-                self.callback(bytes(frame[2:])) #we strip the first two byte which is TNC port number.
+                self.callback(bytes(frame[1:])) #we strip the first two byte which is TNC port number.
     def terminate(self):
         self._running = False
 

@@ -12,7 +12,7 @@ class Frame():
 
 class FreeDV():
     def __init__(self,mode="700D", libpath=f"libcodec2.so"):
-        self.c_lib = ctypes.CDLL(libpath) # future improvement would be to try a few places / names
+        self.c_lib = ctypes.cdll.LoadLibrary(libpath) # future improvement would be to try a few places / names
         self.c_lib.freedv_open.restype = POINTER(c_ubyte)
         self.c_lib.freedv_get_bits_per_modem_frame.restype = c_int
         self.c_lib.freedv_get_n_nom_modem_samples.restype = c_int
