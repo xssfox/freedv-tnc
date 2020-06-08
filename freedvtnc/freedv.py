@@ -48,6 +48,10 @@ class FreeDV():
     @property
     def snr(self):
         return float(self.raw_snr.value)
+
+    @property
+    def sync(self):
+        return bool(self.raw_sync.value)
         
     def ModulationIn(self):
         return c_short * self.c_lib.freedv_get_n_max_modem_samples(self.freedv)
@@ -90,7 +94,7 @@ class FreeDV():
         self.c_lib.freedv_get_modem_stats(self.freedv,byref(self.raw_sync), byref(self.raw_snr))
 
         if frame.sync == True and frame.uncorrected_errors == 0 and bytes_in != len(bytes_in) * b'\x00':
-            logging.debug(f"Demodulated: [SNR: {self.snr:.2f}] {frame.data.hex()}")
+            logging.debug(f"Demodulated: [SNR: {self.snr:.2f} SYNC: {self.sync}] {frame.data.hex()}")
 
        
 

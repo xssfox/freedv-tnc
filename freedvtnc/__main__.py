@@ -2,6 +2,8 @@
 from . import tnc, packet, rigctl, freedv, rf
 import platform
 import logging
+from threading import Lock
+import random
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -16,14 +18,18 @@ logger.setLevel(logging.DEBUG)
 # - disable rig control (vox?)
 # add arg parse
 
+tx_inhibit = Lock()
 
 def kiss_rx_callback(frame: bytes):
     logging.debug(f"Received KISS frame: {frame.hex()}")
+    tx_inhibit.acquire()
     radio.tx([frame]) #TODO : this is where we would queue up packets
+    tx_inhibit.release()
 
 def rf_rx_callback(packet: bytes):
     logging.debug(f"Received RF packet: {packet.hex()}")
     tnc_interface.tx(packet)
+    
 
 rig = rigctl.Rigctld()
 

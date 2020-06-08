@@ -3,6 +3,8 @@ import pyaudio
 from enum import Enum
 from typing import List
 import logging
+from threading import Lock
+import time
 
 # This deals with all the RF things and resampling
 
@@ -29,7 +31,8 @@ class Rf():
                     max_packet_size=2047,
                     preamble_frame_count=3,
                     postamble_frame_count=1,
-                    rig=None
+                    rig=None,
+                    post_tx_wait=2
                 ):
         
         self.state = rx_state.SEARCH
@@ -37,12 +40,16 @@ class Rf():
 
         self.modem=modem
         self.rig=rig
+        self.lock=Lock()
+        self.tx_lock=Lock()
+        self.rx_locked=False
 
         self.preamble = b'\xFF' * modem.bytes_per_frame
         self.postamble = b'\x01' * modem.bytes_per_frame
         self.preamble_frame_count = preamble_frame_count
         self.postamble_frame_count = postamble_frame_count
         self.callback = callback
+        self.post_tx_wait = post_tx_wait
 
         p = pyaudio.PyAudio()
         # Find audio interface from name
@@ -75,6 +82,8 @@ class Rf():
         frame = self.modem.demodulate(audio_sample)
         if audio_sample == len(audio_sample) * b'\x00': #don't demodulate silence as that breaks the freedv modem
             return
+        
+        
         # RX statemachine
         # If we are in search mode we are looking for preambles
         if self.state == rx_state.SEARCH:
@@ -106,6 +115,19 @@ class Rf():
                 logging.debug("RX STATE -> SEARCH: Reached end of packet")
                 logging.info(f"RXed Packet: {self.packet_data}")
                 self.callback(self.packet_data)
+        
+        if frame.sync == False and self.rx_locked == True:
+            try:
+                self.rx_locked = False
+                self.lock.release()
+                logging.debug("Unlocked TX")
+            except RuntimeError:
+                pass
+        elif frame.sync == True and self.rx_locked == False:
+            self.rx_locked = self.lock.acquire(blocking=False)
+            if self.rx_locked:
+                logging.debug("Inhibited TX as possible RX")
+
             
     def tx(self, packets: List[bytes]):
         # We take a list of packets as we want to control the preambles between them to optimize RF time
@@ -130,14 +152,18 @@ class Rf():
         for frame in frames:
             modulated_frames += self.modem.modulate(frame)
 
-        # rx the audio
+        # tx the audio
+        self.lock.acquire()
+        self.tx_lock.acquire()
         self.stream_tx.start_stream()
         if self.rig:
             self.rig.ptt_enable()
         logging.debug(f"TXing modulated frames")
-        # logging.debug(f'Modulated audio: {modulated_frames.hex()}')
+        #logging.debug(f'Modulated audio: {modulated_frames.hex()}')
         self.stream_tx.write(modulated_frames)
         if self.rig:
             self.rig.ptt_disable()
         self.stream_tx.stop_stream()
-
+        self.lock.release()
+        time.sleep(self.post_tx_wait)
+        self.tx_lock.release()
