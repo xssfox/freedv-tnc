@@ -1,0 +1,4 @@
+build_linux
+*.pyc
+__pycache__
+.vscode
