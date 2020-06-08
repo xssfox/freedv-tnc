@@ -16,7 +16,7 @@ POSTAMBLE_FRAMES = 4
 MAX_PACKET_SIZE = 1500
 CLEAR_FOR = 5
 
-MAX_PACKETS_ONE_TX = 8
+MAX_PACKETS_ONE_TX = 1
 
 libname = pathlib.Path().absolute() / "build_linux/src/libcodec2.so"
 c_lib = ctypes.CDLL(libname)

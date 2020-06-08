@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 from . import tnc, packet, rigctl, freedv, rf
 import platform
+import logging
+
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
 
 # some design goals
 # - configurable from command line
@@ -14,18 +18,24 @@ import platform
 
 
 def kiss_rx_callback(frame: bytes):
-    radio.tx(frame) #TODO : this is where we would queue up packets
+    logging.debug(f"Received KISS frame: {frame.hex()}")
+    radio.tx([frame]) #TODO : this is where we would queue up packets
 
 def rf_rx_callback(packet: bytes):
+    logging.debug(f"Received RF packet: {packet.hex()}")
     tnc_interface.tx(packet)
 
 rig = rigctl.Rigctld()
 
 #freedv_library = "libcodec2.so" if platform.uname()[0] != "Darwin" else "libcodec2.dylib"
-freedv_library = "libcodec2.dylib"
+freedv_library = "/usr/local/lib/libcodec2.so"
 modem = freedv.FreeDV(libpath=freedv_library)
 
+
 tnc_interface = tnc.KissInterface(kiss_rx_callback)
+
+print(f'TNC port is at : {tnc_interface.ttyname}')
+
 radio = rf.Rf( 
                 rx_device="default",
                 tx_device="default",
@@ -34,7 +44,10 @@ radio = rf.Rf(
                 rig=rig
             )
 
-radio.rx()
+while True:
+    radio.rx()
+
+
 
 # rx thread
 

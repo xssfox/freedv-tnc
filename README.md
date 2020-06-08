@@ -65,7 +65,7 @@ apt-get install libhamlib-utils libhamlib-dev
 tncattach is used here as a test, however you can use any KISS software with this modem.
 more here: https://unsigned.io/ethernet-and-ip-over-packet-radio-tncs/
 ```
-git clone https://github.com/markqvist/tncattach.gitA
+git clone https://github.com/markqvist/tncattach.git
 cd tncattach
 make
 make install
