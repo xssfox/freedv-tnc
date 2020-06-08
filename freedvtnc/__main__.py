@@ -52,11 +52,3 @@ radio = rf.Rf(
 
 while True:
     radio.rx()
-
-
-
-# rx thread
-
-# kiss rx thread
-
-# tx queue

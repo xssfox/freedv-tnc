@@ -5,13 +5,15 @@ from typing import List
 import logging
 from threading import Lock
 import time
+import audioop
+import random
 
 # This deals with all the RF things and resampling
 
 # Packet structure
 #
 #
-# preamble 0xFF * bytes_per_frame * preamble frame count - needed to get modem sync
+# preamble (random bytes defined below base_preamble) * bytes_per_frame * preamble frame count - needed to get modem sync
 # packet_length, 2 bytes, unsigned big
 # data + padding to fit event even frame count
 # postamble 0x01 * bytes_per_frame this isn't strictly needed but is suggested to allow the modem to finish decoding the last frame. between packets don't send this, just the preamble
@@ -27,12 +29,13 @@ class Rf():
                     callback,
                     rx_device="pulse",
                     tx_device=None,
-                    sample_rate=8000,
+                    audio_sample_rate=48000,
+                    modem_sample_rate=8000,
                     max_packet_size=2047,
                     preamble_frame_count=3,
                     postamble_frame_count=1,
                     rig=None,
-                    post_tx_wait=2
+                    post_tx_wait=5
                 ):
         
         self.state = rx_state.SEARCH
@@ -44,12 +47,20 @@ class Rf():
         self.tx_lock=Lock()
         self.rx_locked=False
 
-        self.preamble = b'\xFF' * modem.bytes_per_frame
+        base_preamble = b'\x5e\x61\xcb\xcd\x37\xdd\xe9\x7c\xc5\xfa\xbc\x34\xe3\xa2\x47\x55'
+
+                        # if the modem bytes per frame is larger than our preable we repeat, if not we truncate
+        self.preamble = (base_preamble * max(1,int( modem.bytes_per_frame/ len(base_preamble)+1)))[:modem.bytes_per_frame]
         self.postamble = b'\x01' * modem.bytes_per_frame
         self.preamble_frame_count = preamble_frame_count
         self.postamble_frame_count = postamble_frame_count
         self.callback = callback
         self.post_tx_wait = post_tx_wait
+
+        self.audio_sample_rate = audio_sample_rate
+        self.modem_sample_rate = modem_sample_rate
+        self.sampele_state = None
+
 
         p = pyaudio.PyAudio()
         # Find audio interface from name
@@ -60,7 +71,7 @@ class Rf():
                 tx_dev = x
         self.stream_rx = p.open(format=pyaudio.paInt16, 
                         channels=1,
-                        rate=sample_rate,
+                        rate=audio_sample_rate,
                         frames_per_buffer=modem.get_n_max_modem_samples(),
                         input=True,
                         input_device_index=rx_dev
@@ -68,8 +79,7 @@ class Rf():
         if tx_device:
             self.stream_tx = p.open(format=pyaudio.paInt16, 
                             channels=1,
-                            rate=sample_rate,
-                            frames_per_buffer=modem.get_n_nom_modem_samples(),
+                            rate=audio_sample_rate,
                             output=True,
                             output_device_index=tx_dev
                         )
@@ -77,7 +87,9 @@ class Rf():
 
 
     def rx(self):
-        audio_sample = self.stream_rx.read(self.modem.nin)
+        audio_sample = self.stream_rx.read(int(self.modem.nin*(self.audio_sample_rate/self.modem_sample_rate)))
+
+        (audio_sample, self.sampele_state) = audioop.ratecv(audio_sample,2,1,self.audio_sample_rate, self.modem_sample_rate, self.sampele_state)
 
         frame = self.modem.demodulate(audio_sample)
         if audio_sample == len(audio_sample) * b'\x00': #don't demodulate silence as that breaks the freedv modem
@@ -152,6 +164,10 @@ class Rf():
         for frame in frames:
             modulated_frames += self.modem.modulate(frame)
 
+        (newfragment, newstate) = audioop.ratecv(modulated_frames,2,1,self.modem_sample_rate, self.audio_sample_rate, None)
+
+        modulated_frames = newfragment
+
         # tx the audio
         self.lock.acquire()
         self.tx_lock.acquire()
@@ -165,5 +181,5 @@ class Rf():
             self.rig.ptt_disable()
         self.stream_tx.stop_stream()
         self.lock.release()
-        time.sleep(self.post_tx_wait)
+        time.sleep(self.post_tx_wait + (random.random()*3)) # add a random amount of 3 seconds as a back off
         self.tx_lock.release()
