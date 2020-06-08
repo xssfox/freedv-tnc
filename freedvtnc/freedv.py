@@ -3,6 +3,7 @@
 import ctypes
 from ctypes import *
 import logging
+import sys
 
 class Frame():
     def __init__(self, uncorrected_errors: int, sync: bool, data: bytes):
@@ -12,7 +13,11 @@ class Frame():
 
 class FreeDV():
     def __init__(self,mode="700D", libpath=f"libcodec2.so"):
-        self.c_lib = ctypes.cdll.LoadLibrary(libpath) # future improvement would be to try a few places / names
+        try:
+            self.c_lib = ctypes.cdll.LoadLibrary(libpath) # future improvement would be to try a few places / names
+        except OSError:
+            print("Could not find libcodec2.so - please ensure it's installed and ldconfig has been run")
+            sys.exit(0)
         self.c_lib.freedv_open.restype = POINTER(c_ubyte)
         self.c_lib.freedv_get_bits_per_modem_frame.restype = c_int
         self.c_lib.freedv_get_n_nom_modem_samples.restype = c_int
