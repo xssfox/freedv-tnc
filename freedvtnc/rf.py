@@ -139,14 +139,14 @@ class Rf():
                 logging.info(f"RXed Packet HEX: {self.packet_data.hex()}")
                 self.callback(self.packet_data)
         
-        if frame.sync == False and self.rx_locked == True:
+        if self.modem.sync == False and self.rx_locked == True:
             try:
                 self.rx_locked = False
                 self.lock.release()
                 logging.debug("Unlocked TX")
             except RuntimeError:
                 pass
-        elif frame.sync == True and self.rx_locked == False:
+        elif self.modem.sync == True and self.rx_locked == False:
             self.rx_locked = self.lock.acquire(blocking=False)
             if self.rx_locked:
                 logging.debug("Inhibited TX as possible RX")
