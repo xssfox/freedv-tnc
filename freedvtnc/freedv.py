@@ -91,7 +91,7 @@ class FreeDV():
         self.c_lib.freedv_rawdatarx(self.freedv, bytes_out, modulation)
         
         frame = Frame(
-            uncorrected_errors=int(self.c_lib.freedv_get_uncorrected_errors()),
+            uncorrected_errors=int(self.c_lib.freedv_get_uncorrected_errors(self.freedv)),
             sync=bool(self.c_lib.freedv_get_sync(self.freedv)),
             data=bytes(bytes_out)
         )

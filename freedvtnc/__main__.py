@@ -26,7 +26,7 @@ def main():
 
 
     group = parser.add_argument_group(title='Advanced TNC Tuneable', description="These settings can be used to tune the TNC")
-    group.add_argument('--preamble-length', dest="preamble_length", default=5, help="Number of preamble frames to send", type=int)
+    group.add_argument('--preamble-length', dest="preamble_length", default=10, help="Number of preamble frames to send", type=int)
     group.add_argument('--min-tx-wait', dest="min_tx_wait", default=5, help="The TNC will wait this value in seconds + a random amount of seconds between 0 and 2", type=int)
 
     args = parser.parse_args()

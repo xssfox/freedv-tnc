@@ -42,7 +42,7 @@ class Rf():
                     preamble_frame_count=5,
                     postamble_frame_count=1,
                     rig=None,
-                    post_tx_wait=5
+                    post_tx_wait=10
                 ):
         
         self.state = rx_state.SEARCH
