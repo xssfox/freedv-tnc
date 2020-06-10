@@ -76,6 +76,10 @@ class Rf():
                 rx_dev = x
             if p.get_device_info_by_index(x)["name"] == tx_device:
                 tx_dev = x
+        if rx_device == False:
+            rx_dev = 0
+        if tx_device == False:
+            tx_dev = 0
         self.stream_rx = p.open(format=pyaudio.paInt16, 
                         channels=1,
                         rate=audio_sample_rate,
