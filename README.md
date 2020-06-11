@@ -1,7 +1,6 @@
 FreeDV-TNC
 ==
 
-**This version hasn't been tested on air but has been simulated locally. Your milage may vary. Please log a github issue with your feedback*
 
 This code interfaces FreeDV 700D modem with a virtual KISS serial port that can be used with tools like APRS, kissattach and tncattach. This was an experiment to try to make an existing opensource modem KISS compatiable that had better performance than the typical Bell 103 300 baud modem.
 
