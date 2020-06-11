@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
 import kissfix # TODO do we need to worry about the python3 issue / kissfix
-import serial
-import os, pty, serial, tty, termios
+import sys
+if sys.platform != "win32":
+    import serial
+    import os, pty, serial, tty, termios
 import threading
 import logging
 

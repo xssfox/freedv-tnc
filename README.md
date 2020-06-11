@@ -23,7 +23,7 @@ I've added a small amount of basic flow control (max packets to send before requ
 
 At the moment the modem isn't particularly happy if it doesn't get fed noise. This isn't a problem on HF as we get plenty of noise for free, but if your using squelch on VHF or UHF this could be a problem. This is something I need to look into
 
-Configuration
+Configuration (Linux/macos - see below for Windows)
 --
 
 An ICOM IC-7100 was used for testing but other rigs that support SSB should work fine.
@@ -78,6 +78,14 @@ For example with tncattach:
 sudo tncattach /dev/pts/22 115200 --mtu 1400 -v
 ```
 
+Windows Install
+--
+
+0. Install FreeDV - https://freedv.org/
+1. Install python (at least 3.6 or higher)
+2. Install pipwin `pip3 install pipwin`
+3. Install portaudio `pipwin.exe install pyaudio` - depending on your python install pipwin might not be in your path. pip command above shoudl warn you abot this and show you where the scripts path is
+4. Install freedvtnc `pip3 install freedvtnc`
 
 Command line arguments
 ==

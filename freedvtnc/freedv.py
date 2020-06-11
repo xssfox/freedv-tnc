@@ -4,6 +4,8 @@ import ctypes
 from ctypes import *
 import logging
 import sys
+from . import winhelpers
+import os
 
 class Frame():
     def __init__(self, uncorrected_errors: int, sync: bool, data: bytes):
@@ -16,9 +18,16 @@ class FreeDV():
         
         if sys.platform == "darwin":
             libpath += ".dylib"
+        elif sys.platform == "win32":
+            libpath = winhelpers.find_codec2()
+            os.chdir(libpath)
+            ctypes.windll.kernel32.SetDllDirectoryW(libpath)
+            os.environ['PATH'] = libpath + ";" + os.environ['PATH']
+            libpath += "\\libcodec2.dll"
         else:
             libpath += ".so"
-        self.c_lib = ctypes.cdll.LoadLibrary(libpath) # future improvement would be to try a few places / names
+        logging.debug(f"Loading: {libpath}")
+        self.c_lib = ctypes.cdll.LoadLibrary(libpath) 
         
         self.c_lib.freedv_open.restype = POINTER(c_ubyte)
         self.c_lib.freedv_get_bits_per_modem_frame.restype = c_int
