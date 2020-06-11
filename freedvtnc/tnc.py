@@ -10,7 +10,7 @@ import logging
 
 class KissInterface():
     def __init__(self, callback):
-        self.k = kissfix.SerialKISS('/dev/ptmx', 9600) # TODO add TCP somehow?
+        self.k = kissfix.SerialKISS('/dev/ptmx', 9600) 
         self.k.start()
 
         # Override the serial interface with our own PTY file descriptor
@@ -26,6 +26,25 @@ class KissInterface():
     def tx(self, bytes_in: bytes):
         frame = kissfix.FEND + b'\00' + kissfix.escape_special_codes(bytes_in) + kissfix.FEND
         os.write(self.control, frame)
+
+
+class KissTCPInterface():
+    def __init__(self, callback):
+        self.k = kissfix.TCPServerKISS('0.0.0.0', 8001) 
+        self.k.start()
+
+        self.rx_thread = KissThread(callback, self.k)
+        self.rx_thread.setDaemon(True)
+        self.rx_thread.start()
+    
+    def tx(self, bytes_in: bytes):
+        try:
+            frame = kissfix.FEND + b'\00' + kissfix.escape_special_codes(bytes_in) + kissfix.FEND
+            self.k._write_handler(frame)
+        except:
+            logging.info("Issue send frame to TCP TNC - Client not connected?")
+            pass # so many things can go wrong here
+        
 
 class KissThread(threading.Thread):
     def __init__(self,callback, interface):

@@ -18,7 +18,7 @@ David Rowe and the FreeDV team for developing the modem and libraries
 
 Notes
 --
-As we use PTS/PTY for serial emulation for better support with software this software will only run on Linux at the moment. In theory it can be adapted to run on macos or Windows using a TCP server instead.
+For Windows and macos users, use --tcp to start a TCP server for the KISS interface.
 
 I've added a small amount of basic flow control (max packets to send before requiring waiting for a little bit). I'm not sure if it's meant to be the TNCs job to do this flow control considering higher layers also do it - though most assume you can do full duplex.
 
@@ -83,14 +83,20 @@ sudo tncattach /dev/pts/22 115200 --mtu 1400 -v
 Command line arguments
 ==
 ```
-usage: freedvtnc [-h] [--modem {700D}] [--rx-sound-device RX_SOUND_DEVICE] [--tx-sound-device TX_SOUND_DEVICE] [--list-sound-devices] [--sample-rate SAMPLE_RATE]
-                 [--rigctl-hostname RIGCTL_HOSTNAME] [--rigctl-port RIGCTL_PORT] [--vox] [-v] [--preamble-length PREAMBLE_LENGTH] [--min-tx-wait MIN_TX_WAIT]
+usage: freedvtnc [-h] [--modem {700D}] [--rx-sound-device RX_SOUND_DEVICE]
+                 [--tx-sound-device TX_SOUND_DEVICE] [--list-sound-devices]
+                 [--sample-rate SAMPLE_RATE]
+                 [--rigctl-hostname RIGCTL_HOSTNAME]
+                 [--rigctl-port RIGCTL_PORT] [--vox] [--no-pty] [--no-tx]
+                 [-v] [--stdout] [--tcp] [--preamble-length PREAMBLE_LENGTH]
+                 [--min-tx-wait MIN_TX_WAIT]
 
 FreeDV Data Modem TNC
 
 optional arguments:
   -h, --help            show this help message and exit
-  --modem {700D}        The FreeDV Modem to use. Currently only 700D is supported
+  --modem {700D}        The FreeDV Modem to use. Currently only 700D is
+                        supported
   --rx-sound-device RX_SOUND_DEVICE
                         The sound card used to rx
   --tx-sound-device TX_SOUND_DEVICE
@@ -103,7 +109,11 @@ optional arguments:
   --rigctl-port RIGCTL_PORT
                         Port for rigtctld
   --vox                 Disables rigctl
+  --no-pty              Disables serial port
+  --no-tx               Disables serial port
   -v                    Enables debug log
+  --stdout              RX data stdout
+  --tcp                 Enabled the TCP Server (listens on 0.0.0.0:8001
 
 Advanced TNC Tuneable:
   These settings can be used to tune the TNC
@@ -111,7 +121,8 @@ Advanced TNC Tuneable:
   --preamble-length PREAMBLE_LENGTH
                         Number of preamble frames to send
   --min-tx-wait MIN_TX_WAIT
-                        The TNC will wait this value in seconds + a random amount of seconds between 0 and 2
+                        The TNC will wait this value in seconds + a random
+                        amount of seconds between 0 and 2
 
 ```
 

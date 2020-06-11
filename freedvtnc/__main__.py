@@ -26,6 +26,7 @@ def main():
     parser.add_argument('--no-tx', action='store_false', help="Disables serial port", dest="tx")
     parser.add_argument('-v', action='store_true', help="Enables debug log", dest="verbose")
     parser.add_argument('--stdout', action='store_true', help="RX data stdout", dest="stdout")
+    parser.add_argument('--tcp', action='store_true', help="Enabled the TCP Server (listens on 0.0.0.0:8001", dest="tcp")
 
     group = parser.add_argument_group(title='Advanced TNC Tuneable', description="These settings can be used to tune the TNC")
     group.add_argument('--preamble-length', dest="preamble_length", default=10, help="Number of preamble frames to send", type=int)
@@ -52,6 +53,8 @@ def main():
         logging.debug(f"Received RF packet: {packet.hex()}")
         if tnc_interface:
             tnc_interface.tx(packet)
+        if tcp_interface:
+            tcp_interface.tx(packet)
         if args.stdout:
             sys.stdout.buffer.write(packet)
             sys.stdout.flush()
@@ -73,7 +76,7 @@ def main():
     try:
         modem = freedv.FreeDV()
     except OSError:
-        logger.error("Could not find libcodec2.so - please ensure it's installed and ldconfig has been run")
+        logger.error("Could not find libcodec2 - please ensure it's installed and ldconfig has been run")
         sys.exit(0)
 
     if sys.platform == "darwin":
@@ -86,6 +89,11 @@ def main():
         logger.info(f'TNC port is at : {tnc_interface.ttyname}')
     else:
         tnc_interface = None
+
+    if args.tcp:
+        tcp_interface = tnc.KissTCPInterface(kiss_rx_callback)
+    else:
+        tcp_interface = None
 
     if args.tx == False:
         args.tx_sound_device = None 
