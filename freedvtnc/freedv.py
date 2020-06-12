@@ -47,6 +47,11 @@ class FreeDV():
 
         self.c_lib.freedv_rawdatarx.argtype = [POINTER(c_ubyte), self.FrameBytes(), self.ModulationIn()]
         self.c_lib.freedv_rawdatatx.argtype = [POINTER(c_ubyte), self.ModulationOut(), self.FrameBytes()]
+
+        base_scramble = b'\xbd\xe5\xa2\xd7\xa5\x72\x02\x3b\x86\x3d\xdd\x7b\xb5\xd8\xc4\x75'
+                        # if the modem bytes per frame is larger than our preable we repeat, if not we truncate
+        self.scramble_pattern = bytearray((base_scramble * max(1,int( self.bytes_per_frame/ len(base_scramble)+1)))[:self.bytes_per_frame])
+
         logging.debug("Initialized FreeDV Modem")
 
         self.nin = 0
@@ -91,7 +96,9 @@ class FreeDV():
         bytes_out = self.FrameBytes()() # initilize a pointer to where bytes will be outputed
         
         self.c_lib.freedv_rawdatarx(self.freedv, bytes_out, modulation)
-        
+
+        bytes_out = self.scramble(bytes_out) # Unscramble
+
         frame = Frame(
             uncorrected_errors=int(self.c_lib.freedv_get_uncorrected_errors(self.freedv)),
             sync=bool(self.c_lib.freedv_get_sync(self.freedv)),
@@ -99,12 +106,12 @@ class FreeDV():
         )
 
         self.c_lib.freedv_get_modem_stats(self.freedv,byref(self.raw_sync), byref(self.raw_snr))
-
+        
         if frame.sync == True and frame.uncorrected_errors == 0 and bytes_in != len(bytes_in) * b'\x00':
             logging.debug(f"Demodulated: [SNR: {self.snr:.2f} SYNC: {self.sync}] {frame.data.hex()}")
 
        
-
+    
         self.update_nin()
 
         return frame
@@ -117,6 +124,8 @@ class FreeDV():
         buffer = bytearray(self.bytes_per_frame) # pad out the frame if it's too short
         buffer[:len(bytes_in)] = bytes_in
 
+        buffer = self.scramble(buffer)
+
         modulation = self.ModulationOut()() # new modulation object and get pointer to it
         
         mod_bytes = self.FrameBytes().from_buffer_copy(buffer)
@@ -124,3 +133,9 @@ class FreeDV():
         self.c_lib.freedv_rawdatatx(self.freedv,modulation,mod_bytes)
 
         return bytes(modulation)
+
+    def scramble(self, bytes_in):
+        output = bytearray(len(bytes_in))
+        for index, single_byte in enumerate(bytearray(bytes_in)):
+            output[index] = (bytes_in[index] ^ self.scramble_pattern[index]) 
+        return output
