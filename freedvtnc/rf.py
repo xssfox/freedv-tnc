@@ -86,7 +86,7 @@ class Rf():
                         input=True,
                         input_device_index=rx_dev
                     )
-        if tx_device:
+        if tx_device != None:
             self.stream_tx = p.open(format=pyaudio.paInt16, 
                             channels=1,
                             rate=audio_sample_rate,
