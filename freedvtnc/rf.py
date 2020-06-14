@@ -23,6 +23,7 @@ class rx_state(Enum): # might make a proper state machine later
     SYNC =  2
     RECEIVE = 3
     RECOVER = 4
+    PARITY = 5 # skips the next frame as it'll be used unused parity
 
 def list_audio_devices() -> list:
     p = pyaudio.PyAudio()
@@ -43,7 +44,8 @@ class Rf():
                     preamble_frame_count=5,
                     postamble_frame_count=2, # we need to send a little bit extra to receive the last frame
                     rig=None,
-                    post_tx_wait=10
+                    post_tx_wait_min=10,
+                    post_tx_wait_max=10
                 ):
         
         self.state = rx_state.SEARCH
@@ -61,7 +63,8 @@ class Rf():
         self.preamble_frame_count = preamble_frame_count
         self.postamble_frame_count = postamble_frame_count
         self.callback = callback
-        self.post_tx_wait = post_tx_wait
+        self.post_tx_wait_min = post_tx_wait_min
+        self.post_tx_wait_max = post_tx_wait_max
 
         self.audio_sample_rate = audio_sample_rate
         self.modem_sample_rate = modem_sample_rate
@@ -180,11 +183,14 @@ class Rf():
                     self.state = rx_state.RECOVER
                 else:
                     logging.debug(f"Calculated Parity: {bytes(self.rx_parity.parity_block).hex()}")
-                    self.state = rx_state.SEARCH
+                    self.state = rx_state.PARITY
                     logging.debug("RX STATE -> SEARCH: Reached end of packet")
                     logging.info(f"RXed Packet: {self.packet_data}")
                     logging.info(f"RXed Packet HEX: {self.packet_data.hex()}")
                     self.callback(self.packet_data)
+        elif self.state == rx_state.PARITY: # we do this to prevent
+            logging.debug("Received parity frame but we don't need it.")
+            self.state = rx_state.SEARCH
 
 
 
@@ -224,7 +230,8 @@ class Rf():
                 parity.add_block(frame)
                 frames.append(frame)
             
-            frames.extend([bytes(parity.parity_block)] * self.postamble_frame_count)
+            frames.extend([bytes(parity.parity_block)])
+        frames.extend([bytes(parity.parity_block)] * (self.postamble_frame_count -1))
 
         # turn the packeterized frames into modulated audio
         modulated_frames = b''
@@ -249,7 +256,8 @@ class Rf():
             self.rig.ptt_disable()
         self.stream_tx.stop_stream()
         self.lock.release()
-        time.sleep(self.post_tx_wait + (random.random()*2)) # add a random amount of 2 seconds as a back off
+        if self.post_tx_wait_max != 0:
+            time.sleep(random.uniform(self.post_tx_wait_min, self.post_tx_wait_max)) # add a random amount of 2 seconds as a back off
         self.tx_lock.release()
 
     class ParityBlock():

@@ -3,6 +3,7 @@ from . import tnc, rigctl, freedv, rf
 import platform
 import logging
 from threading import Lock
+import threading
 import random
 import argparse
 import sys
@@ -30,7 +31,9 @@ def main():
 
     group = parser.add_argument_group(title='Advanced TNC Tuneable', description="These settings can be used to tune the TNC")
     group.add_argument('--preamble-length', dest="preamble_length", default=9, help="Number of preamble frames to send", type=int)
-    group.add_argument('--min-tx-wait', dest="min_tx_wait", default=5, help="The TNC will wait this value in seconds + a random amount of seconds between 0 and 2", type=int)
+    group.add_argument('--min-tx-wait', dest="min_tx_wait", default=5, help="The TNC will wait this value in seconds", type=int)
+    group.add_argument('--max-tx-wait', dest="max_tx_wait", default=7, help="The TNC will wait this value in seconds", type=int)
+    group.add_argument('--max-packets-tx', dest="max_packets", default=1, help="The number of frames that can be TXed at once. Set to -1 to send all", type=int)
 
     args = parser.parse_args()
 
@@ -40,14 +43,11 @@ def main():
         sys.exit(0)
 
 
-    tx_inhibit = Lock()
 
     def kiss_rx_callback(frame: bytes):
         logging.debug(f"Received KISS frame: {frame.hex()}")
-        tx_inhibit.acquire()
         if args.tx:
-            radio.tx([frame]) #TODO : this is where we could send multiple packets but a lot of protocols except one at a time
-        tx_inhibit.release()
+            tx_thread.tx_queue.append(frame)
 
     def rf_rx_callback(packet: bytes):
         logging.debug(f"Received RF packet: {packet.hex()}")
@@ -106,14 +106,49 @@ def main():
                         callback=rf_rx_callback,
                         rig=rig,
                         preamble_frame_count=args.preamble_length,
-                        post_tx_wait=args.min_tx_wait
+                        post_tx_wait_min=args.min_tx_wait,
+                        post_tx_wait_max=args.max_tx_wait
                     )
     except UnboundLocalError:
        logger.error("Couldn't intialize RF. Likely your soundcard isn't avaliable")
        sys.exit()
+    
+    class TXThread(threading.Thread):
+        def __init__(self,radio, max_packets):
+            threading.Thread.__init__(self)
+            self.tx_queue=[]
+            self.radio = radio
+            self.max_packets = max_packets
+            self._running = True
+            self.tx_inhibit = Lock()
+        def run(self):
+            while self._running == True:
+                self.tx()
+        def terminate(self):
+            self._running = False
+        def tx(self):
+            self.tx_inhibit.acquire()
+            if self.max_packets == -1:
+                messages = self.tx_queue
+                self.tx_queue = []
+            else:
+                messages = self.tx_queue[:self.max_packets]
+                del self.tx_queue[:self.max_packets]
+            if len(messages) > 0:
+                self.radio.tx(messages)
+            self.tx_inhibit.release()
+
+    tx_thread = TXThread(radio, args.max_packets)
+    tx_thread.setDaemon(True)
+    tx_thread.start()
 
     while True:
         radio.rx()
 
+
+
+            
 if __name__ == "__main__":
     main()
+
+
