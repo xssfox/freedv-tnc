@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "freedvtnc"
-version = "0.2.5"
+version = "0.2.6"
 description = ""
 authors = ["xssfox"]
 license = "WTFPL"
@@ -8,7 +8,7 @@ license = "WTFPL"
 [tool.poetry.dependencies]
 python = "^3.6"
 pyaudio = "^0.2.11"
-kissfix = "^7.0.7"
+kissfix = "^7.0.9"
 
 [tool.poetry.dev-dependencies]
 

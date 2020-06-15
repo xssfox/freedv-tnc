@@ -5,6 +5,7 @@ import serial
 import os, pty, serial, tty, termios
 import threading
 import logging
+import sys, traceback
 
 # This deals with encoding and decoding KISS frames
 
@@ -42,6 +43,7 @@ class KissTCPInterface():
             frame = kissfix.FEND + b'\00' + kissfix.escape_special_codes(bytes_in) + kissfix.FEND
             self.k._write_handler(frame)
         except:
+            traceback.print_exc(file=sys.stderr)
             logging.info("Issue send frame to TCP TNC - Client not connected?")
             pass # so many things can go wrong here
         
