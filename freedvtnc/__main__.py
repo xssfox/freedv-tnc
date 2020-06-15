@@ -7,6 +7,7 @@ import threading
 import random
 import argparse
 import sys
+import time
 
 def main():
     logger = logging.getLogger()
@@ -120,14 +121,13 @@ def main():
             self.radio = radio
             self.max_packets = max_packets
             self._running = True
-            self.tx_inhibit = Lock()
         def run(self):
             while self._running == True:
+                time.sleep(0.01)
                 self.tx()
         def terminate(self):
             self._running = False
         def tx(self):
-            self.tx_inhibit.acquire()
             if self.max_packets == -1:
                 messages = self.tx_queue
                 self.tx_queue = []
@@ -136,7 +136,6 @@ def main():
                 del self.tx_queue[:self.max_packets]
             if len(messages) > 0:
                 self.radio.tx(messages)
-            self.tx_inhibit.release()
 
     tx_thread = TXThread(radio, args.max_packets)
     tx_thread.setDaemon(True)
