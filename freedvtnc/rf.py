@@ -29,7 +29,7 @@ def list_audio_devices() -> list:
     p = pyaudio.PyAudio()
     devices = []
     for x in range(0, p.get_device_count()):
-        devices.append(p.get_device_info_by_index(x)["name"])
+        devices.append(f"{x} - {p.get_device_info_by_index(x)['name']}")
     return devices
 
 class Rf():
@@ -73,6 +73,14 @@ class Rf():
 
         p = pyaudio.PyAudio()
         # Find audio interface from name
+        try:
+            rx_dev = int(rx_device)
+        except:
+            pass
+        try:
+            tx_dev = int(tx_device)
+        except:
+            pass        
         for x in range(0, p.get_device_count()):
             if p.get_device_info_by_index(x)["name"] == rx_device:
                 rx_dev = x
