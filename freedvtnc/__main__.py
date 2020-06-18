@@ -48,7 +48,7 @@ def main():
     def kiss_rx_callback(frame: bytes):
         logging.debug(f"Received KISS frame: {frame.hex()}")
         if args.tx:
-            tx_thread.tx_queue.append(frame)
+            radio.tx([frame])
 
     def rf_rx_callback(packet: bytes):
         logging.debug(f"Received RF packet: {packet.hex()}")
@@ -108,39 +108,13 @@ def main():
                         rig=rig,
                         preamble_frame_count=args.preamble_length,
                         post_tx_wait_min=args.min_tx_wait,
-                        post_tx_wait_max=args.max_tx_wait
+                        post_tx_wait_max=args.max_tx_wait,
+                        max_packets=args.max_packets
                     )
     except UnboundLocalError:
        logger.error("Couldn't intialize RF. Likely your soundcard isn't avaliable")
        sys.exit()
     
-    class TXThread(threading.Thread):
-        def __init__(self,radio, max_packets):
-            threading.Thread.__init__(self)
-            self.tx_queue=[]
-            self.radio = radio
-            self.max_packets = max_packets
-            self._running = True
-        def run(self):
-            while self._running == True:
-                time.sleep(0.01)
-                self.tx()
-        def terminate(self):
-            self._running = False
-        def tx(self):
-            if self.max_packets == -1:
-                messages = self.tx_queue
-                self.tx_queue = []
-            else:
-                messages = self.tx_queue[:self.max_packets]
-                del self.tx_queue[:self.max_packets]
-            if len(messages) > 0:
-                self.radio.tx(messages)
-
-    tx_thread = TXThread(radio, args.max_packets)
-    tx_thread.setDaemon(True)
-    tx_thread.start()
-
     while True:
         radio.rx()
 

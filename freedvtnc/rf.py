@@ -7,6 +7,7 @@ from threading import Lock
 import time
 import audioop
 import random
+import threading
 
 # This deals with all the RF things and resampling
 
@@ -45,11 +46,16 @@ class Rf():
                     postamble_frame_count=2, # we need to send a little bit extra to receive the last frame
                     rig=None,
                     post_tx_wait_min=10,
-                    post_tx_wait_max=10
+                    post_tx_wait_max=10,
+                    max_packets=3
                 ):
         
+        self.tx_buffer=[]
+        self.tx_sample_state = None
+
         self.state = rx_state.SEARCH
         self.max_packet_size = max_packet_size
+        self.max_packets = max_packets
 
         self.modem=modem
         self.rig=rig
@@ -105,6 +111,11 @@ class Rf():
                             output_device_index=tx_dev
                         )
 
+
+        self.tx_thread = self.TXThread(self.process_queue)
+        self.tx_thread.setDaemon(True)
+        self.tx_thread.start()
+        logging.debug("Started TX Thread")
 
 
     def rx(self):
@@ -216,18 +227,31 @@ class Rf():
 
             
     def tx(self, packets: List[bytes]):
-        # We take a list of packets as we want to control the preambles between them to optimize RF time
-        frames = []
-        
-        frames.extend([self.preamble] * (self.preamble_frame_count - 1)) #each packet will start with a preamble so we can exclude it from the long start preamble
+        self.tx_buffer.extend(packets)
 
-        for packet in packets:
+    def process_queue(self):
+        if not self.tx_buffer: #only run if we have something in the queue
+            return
+
+        self.lock.acquire()
+        self.tx_lock.acquire()
+        self.stream_tx.start_stream()
+        if self.rig:
+            self.rig.ptt_enable()
+
+        for x in range(0, self.preamble_frame_count-1):
+            self.modulate_tx(self.preamble)
+
+        sent = 0
+        while self.tx_buffer and sent <= self.max_packets:
+            sent += 1
+            packet = self.tx_buffer.pop(0)
             logging.info(f"TXing packet: {packet}")
             logging.info(f"TXing packet HEX: {packet.hex()}")
-            frames.append(self.preamble)
+            self.modulate_tx(self.preamble)
             header = len(packet).to_bytes(2, byteorder='big', signed=False) +  packet[:self.modem.bytes_per_frame-2]
             header += b'\x00' * (self.modem.bytes_per_frame - len(header)) # pad out if short
-            frames.append(header)
+            self.modulate_tx(header)
             parity = self.ParityBlock()
             parity.add_block(header)
 
@@ -236,37 +260,32 @@ class Rf():
                 frame = packet[offset:offset+self.modem.bytes_per_frame]
                 frame += b'\x00' * (self.modem.bytes_per_frame - len(frame)) # pad out if short
                 parity.add_block(frame)
-                frames.append(frame)
+                self.modulate_tx(frame)
             
-            frames.extend([bytes(parity.parity_block)])
-        frames.extend([bytes(parity.parity_block)] * (self.postamble_frame_count -1))
+            self.modulate_tx(bytes(parity.parity_block))
+        for x in range(0,self.postamble_frame_count -1):
+            self.modulate_tx(bytes(parity.parity_block))
 
-        # turn the packeterized frames into modulated audio
-        modulated_frames = b''
-        
-        for frame in frames:
-            modulated_frames += self.modem.modulate(frame)
+        self.tx_sample_state = None
 
-        (newfragment, newstate) = audioop.ratecv(modulated_frames,2,1,self.modem_sample_rate, self.audio_sample_rate, None)
-
-        modulated_frames = newfragment
-
-        # tx the audio
-        self.lock.acquire()
-        self.tx_lock.acquire()
-        self.stream_tx.start_stream()
-        if self.rig:
-            self.rig.ptt_enable()
-        logging.debug(f"TXing modulated frames")
-        #logging.debug(f'Modulated audio: {modulated_frames.hex()}')
-        self.stream_tx.write(modulated_frames)
         if self.rig:
             self.rig.ptt_disable()
+        
         self.stream_tx.stop_stream()
         self.lock.release()
         if self.post_tx_wait_max != 0:
             time.sleep(random.uniform(self.post_tx_wait_min, self.post_tx_wait_max)) # add a random amount of 2 seconds as a back off
         self.tx_lock.release()
+
+
+    def modulate_tx(self, frame: bytes):
+
+        # turn the packeterized frames into modulated audio
+        modulated_frame = self.modem.modulate(frame)
+        
+        (modulated_frame, self.tx_sample_state) = audioop.ratecv(modulated_frame,2,1,self.modem_sample_rate, self.audio_sample_rate, self.tx_sample_state)
+
+        self.stream_tx.write(modulated_frame)
 
     class ParityBlock():
         def __init__(self):
@@ -278,3 +297,16 @@ class Rf():
             else:
                 for index, single_byte in enumerate(bytearray(bytes_in)):
                     self.parity_block[index] = (bytes_in[index] ^ self.parity_block[index]) 
+
+    class TXThread(threading.Thread):
+        def __init__(self,process_queue):
+            threading.Thread.__init__(self)
+            self._running = True
+            self.process_queue = process_queue
+        def run(self):
+            while self._running == True:
+                self.process_queue()
+                time.sleep(0.01)
+
+        def terminate(self):
+            self._running = False
