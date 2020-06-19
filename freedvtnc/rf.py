@@ -243,7 +243,7 @@ class Rf():
             self.modulate_tx(self.preamble)
 
         sent = 0
-        while self.tx_buffer and sent <= self.max_packets:
+        while self.tx_buffer and (sent <= self.max_packets or self.max_packets == -1 or self.max_packets == 0): # TODO check for -1 here
             sent += 1
             packet = self.tx_buffer.pop(0)
             logging.info(f"TXing packet: {packet}")
