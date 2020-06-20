@@ -8,6 +8,7 @@ import time
 import audioop
 import random
 import threading
+import sys
 
 # This deals with all the RF things and resampling
 
@@ -96,14 +97,20 @@ class Rf():
             rx_dev = 0
         if tx_device == False:
             tx_dev = 0
-        self.stream_rx = p.open(format=pyaudio.paInt16, 
-                        channels=1,
-                        rate=audio_sample_rate,
-                        frames_per_buffer=modem.get_n_max_modem_samples(),
-                        input=True,
-                        input_device_index=rx_dev
-                    )
-        if tx_device != None:
+
+        if rx_device == 'stdin':
+            self.stream_rx = sys.stdin.buffer
+        else:
+            self.stream_rx = p.open(format=pyaudio.paInt16, 
+                            channels=1,
+                            rate=audio_sample_rate,
+                            frames_per_buffer=modem.get_n_max_modem_samples(),
+                            input=True,
+                            input_device_index=rx_dev
+                        )
+        if tx_device == 'stdout':
+            self.stream_tx = sys.stdout.buffer
+        elif tx_device != None:
             self.stream_tx = p.open(format=pyaudio.paInt16, 
                             channels=1,
                             rate=audio_sample_rate,
@@ -119,8 +126,10 @@ class Rf():
 
 
     def rx(self):
-        audio_sample = self.stream_rx.read(int(self.modem.nin*(self.audio_sample_rate/self.modem_sample_rate)), exception_on_overflow = False) 
-
+        if type(self.stream_rx) == pyaudio.Stream:
+            audio_sample = self.stream_rx.read(int(self.modem.nin*(self.audio_sample_rate/self.modem_sample_rate)), exception_on_overflow = False) 
+        else: # for stdin
+            audio_sample = self.stream_rx.read((int(self.modem.nin*(self.audio_sample_rate/self.modem_sample_rate)))*2) # times 2 for 16bit samples 
         (audio_sample, self.sampele_state) = audioop.ratecv(audio_sample,2,1,self.audio_sample_rate, self.modem_sample_rate, self.sampele_state)
 
         frame = self.modem.demodulate(audio_sample)
@@ -235,7 +244,8 @@ class Rf():
 
         self.lock.acquire()
         self.tx_lock.acquire()
-        self.stream_tx.start_stream()
+        if type(self.stream_tx) == pyaudio.Stream:
+            self.stream_tx.start_stream()
         if self.rig:
             self.rig.ptt_enable()
 
@@ -270,8 +280,8 @@ class Rf():
 
         if self.rig:
             self.rig.ptt_disable()
-        
-        self.stream_tx.stop_stream()
+        if type(self.stream_tx) == pyaudio.Stream:
+            self.stream_tx.stop_stream()
         self.lock.release()
         if self.post_tx_wait_max != 0:
             time.sleep(random.uniform(self.post_tx_wait_min, self.post_tx_wait_max)) # add a random amount of 2 seconds as a back off
@@ -284,7 +294,7 @@ class Rf():
         modulated_frame = self.modem.modulate(frame)
         
         (modulated_frame, self.tx_sample_state) = audioop.ratecv(modulated_frame,2,1,self.modem_sample_rate, self.audio_sample_rate, self.tx_sample_state)
-
+        
         self.stream_tx.write(modulated_frame)
 
     class ParityBlock():

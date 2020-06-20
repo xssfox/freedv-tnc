@@ -6,7 +6,7 @@ from threading import Lock
 import threading
 import random
 import argparse
-import sys
+import sys, traceback
 import time
 
 def main():
@@ -17,8 +17,8 @@ def main():
     parser = argparse.ArgumentParser(description='FreeDV Data Modem TNC')
 
     parser.add_argument('--modem', dest="modem", default="700D", choices=['700D'], help="The FreeDV Modem to use. Currently only 700D is supported", type=str)
-    parser.add_argument('--rx-sound-device', dest="rx_sound_device", default=False, help="The sound card used to rx", type=str)
-    parser.add_argument('--tx-sound-device', dest="tx_sound_device", default=False, help="The sound card used to tx", type=str)
+    parser.add_argument('--rx-sound-device', dest="rx_sound_device", default=False, help="The sound card used to rx. Use --list-sound-devices and either use the name or the number of the device. Set to stdin to use stdin.", type=str)
+    parser.add_argument('--tx-sound-device', dest="tx_sound_device", default=False, help="The sound card used to tx. Use --list-sound-devices and either use the name or the number of the device. Set to stdout to use stdout.", type=str)
     parser.add_argument('--list-sound-devices', dest="list_sound_devices", action='store_true', help="List audio devices")
     parser.add_argument('--sample-rate', dest="sample_rate", default=44100, help="Sample rate of the soundcard.", type=int)
     parser.add_argument('--rigctl-hostname', dest="rigctl_hostname", default='localhost', help="Hostname or IP of the rigctld server", type=str)
@@ -112,8 +112,9 @@ def main():
                         max_packets=args.max_packets
                     )
     except UnboundLocalError:
-       logger.error("Couldn't intialize RF. Likely your soundcard isn't avaliable")
-       sys.exit()
+        traceback.print_exc(file=sys.stderr)
+        logger.error("Couldn't intialize RF. Likely your soundcard isn't avaliable")
+        sys.exit()
     
     while True:
         radio.rx()
