@@ -44,7 +44,7 @@ class Rf():
                     modem_sample_rate=8000,
                     max_packet_size=2047,
                     preamble_frame_count=5,
-                    postamble_frame_count=2, # we need to send a little bit extra to receive the last frame
+                    postamble_frame_count=4, # we need to send a little bit extra to receive the last frame
                     rig=None,
                     post_tx_wait_min=10,
                     post_tx_wait_max=10,
