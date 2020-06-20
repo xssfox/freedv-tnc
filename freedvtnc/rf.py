@@ -77,6 +77,8 @@ class Rf():
         self.modem_sample_rate = modem_sample_rate
         self.sampele_state = None
 
+        self.rx_frame_count = 0
+
 
         p = pyaudio.PyAudio()
         # Find audio interface from name
@@ -132,7 +134,7 @@ class Rf():
             audio_sample = self.stream_rx.read((int(self.modem.nin*(self.audio_sample_rate/self.modem_sample_rate)))*2) # times 2 for 16bit samples 
         (audio_sample, self.sampele_state) = audioop.ratecv(audio_sample,2,1,self.audio_sample_rate, self.modem_sample_rate, self.sampele_state)
 
-        frame = self.modem.demodulate(audio_sample)
+        frame = self.modem.demodulate(audio_sample, self.rx_frame_count)
         if audio_sample == len(audio_sample) * b'\x00': #don't demodulate silence as that breaks the freedv modem
             if self.rx_locked == True:
                 self.rx_locked = False
@@ -148,7 +150,9 @@ class Rf():
             if frame.data == self.preamble and frame.uncorrected_errors == 0 and frame.sync == True:
                 self.state = rx_state.SYNC # the next frame could be a packet
                 logging.debug("RX STATE -> SYNC: Preamble found, waiting for header")
+                self.rx_frame_count = 0
         if self.state == rx_state.RECOVER:
+            self.rx_frame_count = 0
             if (frame.uncorrected_errors > 0 or frame.sync == False):
                 logging.debug(f"Parity block not received - could not recover")
                 self.state = rx_state.SEARCH
@@ -173,13 +177,14 @@ class Rf():
                 self.frame_errors += 1
                 self.frame_error_location = len(self.packet_data)
                 logging.debug(f"Dropped frame but might be able to cover - missing frame at {self.frame_error_location}")
-                
+                self.rx_frame_count += 1
                 self.packet_data += b'\x00' * self.modem.bytes_per_frame
                 self.remaining_bytes -= self.modem.bytes_per_frame
                 if self.remaining_bytes <= 0:
                     logging.debug("This was the last frame so we need to change state straight to recover")
                     self.state = rx_state.RECOVER
             else:
+                self.rx_frame_count = 0
                 self.state = rx_state.SEARCH # We had an error decoding so back to searching for preamble
                 logging.debug("RX STATE -> SEARCH: Packet loss - looking for preamble")
         if self.state == rx_state.SYNC:
@@ -195,6 +200,7 @@ class Rf():
                 logging.debug(f"RX Remaining Bytes: {self.remaining_bytes}")
                 if self.remaining_bytes > self.max_packet_size: #if we get a header that's larger than max packet size somethings gone wrong and we want to search again
                     self.state = rx_state.SEARCH
+                    self.rx_frame_count = 0
                     logging.debug("RX STATE -> SEARCH: Reached end of packet")
                 header = True
                 frame.data = frame.data[2:] # strip off the header
@@ -202,6 +208,7 @@ class Rf():
         if self.state == rx_state.RECEIVE and (frame.uncorrected_errors == 0 and frame.sync == True):
             if header != True:
                 self.rx_parity.add_block(frame.data)
+            self.rx_frame_count += 1
             self.packet_data += frame.data[:min(len(frame.data), self.remaining_bytes)] # append the frame bytes to the packet, unless we are past the length
             self.remaining_bytes -= min(len(frame.data), self.remaining_bytes)
             logging.debug(f"RX Remaining Bytes: {self.remaining_bytes}")
@@ -219,6 +226,7 @@ class Rf():
         elif self.state == rx_state.PARITY: # we do this to prevent
             logging.debug("Received parity frame but we don't need it.")
             self.state = rx_state.SEARCH
+            self.rx_frame_count = 0
 
 
 
@@ -266,11 +274,13 @@ class Rf():
             parity.add_block(header)
 
             #get the remaining packet data as frames (skipping the header frame)
+            tx_frame_count = 1
             for offset in range(self.modem.bytes_per_frame-2, len(packet), self.modem.bytes_per_frame):
                 frame = packet[offset:offset+self.modem.bytes_per_frame]
                 frame += b'\x00' * (self.modem.bytes_per_frame - len(frame)) # pad out if short
                 parity.add_block(frame)
-                self.modulate_tx(frame)
+                self.modulate_tx(frame, tx_frame_count)
+                tx_frame_count += 1
             
             self.modulate_tx(bytes(parity.parity_block))
         for x in range(0,self.postamble_frame_count -1):
@@ -288,10 +298,10 @@ class Rf():
         self.tx_lock.release()
 
 
-    def modulate_tx(self, frame: bytes):
+    def modulate_tx(self, frame: bytes, tx_frame_count=0):
 
         # turn the packeterized frames into modulated audio
-        modulated_frame = self.modem.modulate(frame)
+        modulated_frame = self.modem.modulate(frame, tx_frame_count)
         
         (modulated_frame, self.tx_sample_state) = audioop.ratecv(modulated_frame,2,1,self.modem_sample_rate, self.audio_sample_rate, self.tx_sample_state)
         

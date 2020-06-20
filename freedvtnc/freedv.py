@@ -85,7 +85,7 @@ class FreeDV():
             logging.debug(f"Updated nin {new_nin}")
         self.nin = new_nin
 
-    def demodulate(self, bytes_in: bytes) -> bytes:
+    def demodulate(self, bytes_in: bytes, packet_num=0) -> bytes:
         # from_buffer_copy requires exact size so we pad it out.
         buffer = bytearray(len(self.ModulationIn()())*sizeof(c_short)) # create empty byte array
         buffer[:len(bytes_in)] = bytes_in # copy across what we have
@@ -97,7 +97,7 @@ class FreeDV():
         
         self.c_lib.freedv_rawdatarx(self.freedv, bytes_out, modulation)
 
-        bytes_out = self.scramble(bytes_out) # Unscramble
+        bytes_out = self.unscramble(bytes_out, packet_num) # Unscramble
 
         frame = Frame(
             uncorrected_errors=int(self.c_lib.freedv_get_uncorrected_errors(self.freedv)),
@@ -116,7 +116,7 @@ class FreeDV():
 
         return frame
 
-    def modulate(self, bytes_in: bytes) -> bytes:
+    def modulate(self, bytes_in: bytes, packet_num=0) -> bytes:
         logging.debug(f"Modulating: {bytes_in.hex()}")
         if len(bytes_in) > self.bytes_per_frame:
             raise AttributeError(f"bytes_in ({len(bytes_in)}) > than bytes_per_frame({self.bytes_per_frame}) supported by this mode")
@@ -124,7 +124,7 @@ class FreeDV():
         buffer = bytearray(self.bytes_per_frame) # pad out the frame if it's too short
         buffer[:len(bytes_in)] = bytes_in
 
-        buffer = self.scramble(buffer)
+        buffer = self.scramble(buffer, packet_num)
 
         modulation = self.ModulationOut()() # new modulation object and get pointer to it
         
@@ -134,8 +134,11 @@ class FreeDV():
 
         return bytes(modulation)
 
-    def scramble(self, bytes_in):
+    def scramble(self, bytes_in, packet_num=0):
         output = bytearray(len(bytes_in))
+        scramble_pattern = self.scramble_pattern[packet_num:] + self.scramble_pattern[:packet_num]
         for index, single_byte in enumerate(bytearray(bytes_in)):
             output[index] = (bytes_in[index] ^ self.scramble_pattern[index]) 
         return output
+
+    unscramble = scramble

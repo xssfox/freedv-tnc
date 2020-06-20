@@ -4,7 +4,7 @@ description = "Python KISS Module."
 name = "kissfix"
 optional = false
 python-versions = "*"
-version = "7.0.7"
+version = "7.0.11"
 
 [package.dependencies]
 pyserial = ">=3.4"
@@ -26,13 +26,13 @@ python-versions = "*"
 version = "3.4"
 
 [metadata]
-content-hash = "cd78917f7f4eea0ca6d6b1c7d38599e1b8c456430d28bdf698768523e2b7f8d5"
+content-hash = "f4d662320830adac3218efa241559dd5d9917130726127c500864952f83a12d6"
 python-versions = "^3.6"
 
 [metadata.files]
 kissfix = [
-    {file = "kissfix-7.0.7-py3-none-any.whl", hash = "sha256:8f407596a4b82516ccc553898bc4f84823b1194db150f48b8c3684834192a9a1"},
-    {file = "kissfix-7.0.7.tar.gz", hash = "sha256:f5d185163f2613857013654e46efa685baf2896cc0f8dd7f0adde996f64b486b"},
+    {file = "kissfix-7.0.11-py3-none-any.whl", hash = "sha256:aa2a90d19549eba1ad08adb83cca7b9d147ec805918c208cfbb85dc834e2eeb8"},
+    {file = "kissfix-7.0.11.tar.gz", hash = "sha256:6d17a27c152a06be0329c701c2f32e1f5bdbc2c1a8361ae1af4c92e4d406baa8"},
 ]
 pyaudio = [
     {file = "PyAudio-0.2.11-cp27-cp27m-win32.whl", hash = "sha256:f78d543a98b730e64621ebf7f3e2868a79ade0a373882ef51c0293455ffa8e6e"},
