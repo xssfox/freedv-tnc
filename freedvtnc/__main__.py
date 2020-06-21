@@ -115,14 +115,17 @@ def main():
         traceback.print_exc(file=sys.stderr)
         logger.error("Couldn't intialize RF. Likely your soundcard isn't avaliable")
         sys.exit()
-    
-    while True:
-        radio.rx()
-
+    try:
+        while True:
+            radio.rx()
+    except:
+        traceback.print_exc(file=sys.stderr)
+        if rig:
+            rig.ptt_disable()
+        
 
 
             
 if __name__ == "__main__":
     main()
-
 

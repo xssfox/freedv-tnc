@@ -116,6 +116,7 @@ class Rf():
             self.stream_tx = p.open(format=pyaudio.paInt16, 
                             channels=1,
                             rate=audio_sample_rate,
+                            frames_per_buffer=modem.get_n_max_modem_samples(),
                             output=True,
                             output_device_index=tx_dev
                         )
