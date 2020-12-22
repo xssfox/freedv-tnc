@@ -18,8 +18,11 @@ class FreeDV():
             libpath += ".dylib"
         else:
             libpath += ".so"
-        self.c_lib = ctypes.cdll.LoadLibrary(libpath) # future improvement would be to try a few places / names
-        
+        try:
+            self.c_lib = ctypes.cdll.LoadLibrary(libpath) # future improvement would be to try a few places / names
+        except OSError:
+            self.c_lib = ctypes.cdll.LoadLibrary(f"/usr/local/lib/{libpath}")
+
         self.c_lib.freedv_open.restype = POINTER(c_ubyte)
         self.c_lib.freedv_get_bits_per_modem_frame.restype = c_int
         self.c_lib.freedv_get_n_nom_modem_samples.restype = c_int
@@ -29,9 +32,15 @@ class FreeDV():
 
         self.c_lib.freedv_nin.restype = c_int
 
-        self.c_lib.freedv_get_uncorrected_errors.restype = c_int
         self.c_lib.freedv_get_sync.restype = c_int
-        self.c_lib.freedv_get_uncorrected_errors.restype = c_int
+
+        # freedv_get_uncorrected_errors was renamed to freedv_get_total_packet_errors and ideally we want to support both for the moment
+        try:
+            self.freedv_get_uncorrected_errors = self.c_lib.freedv_get_uncorrected_errors
+        except AttributeError:
+            self.freedv_get_uncorrected_errors = self.c_lib.freedv_get_total_packet_errors
+        
+        self.freedv_get_uncorrected_errors.restype = c_int
 
         self.raw_sync = c_int()
         self.raw_snr = c_float()
@@ -100,7 +109,7 @@ class FreeDV():
         bytes_out = self.unscramble(bytes_out, packet_num) # Unscramble
 
         frame = Frame(
-            uncorrected_errors=int(self.c_lib.freedv_get_uncorrected_errors(self.freedv)),
+            uncorrected_errors=int(self.freedv_get_uncorrected_errors(self.freedv)),
             sync=bool(self.c_lib.freedv_get_sync(self.freedv)),
             data=bytes(bytes_out)
         )
