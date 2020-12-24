@@ -148,13 +148,13 @@ class Rf():
         header = False
 
         if self.state == rx_state.SEARCH:
-            if frame.data == self.preamble and frame.uncorrected_errors == 0 and frame.sync == True:
+            if frame.data == self.preamble and frame.valid and frame.sync == True:
                 self.state = rx_state.SYNC # the next frame could be a packet
                 logging.debug("RX STATE -> SYNC: Preamble found, waiting for header")
                 self.rx_frame_count = 0
         if self.state == rx_state.RECOVER:
             self.rx_frame_count = 0
-            if (frame.uncorrected_errors > 0 or frame.sync == False):
+            if (not frame.valid or frame.sync == False):
                 logging.debug(f"Parity block not received - could not recover")
                 self.state = rx_state.SEARCH
             else:
@@ -173,7 +173,7 @@ class Rf():
                 logging.info(f"RXed Packet: {self.packet_data}")
                 logging.info(f"RXed Packet HEX: {self.packet_data.hex()}")
                 self.callback(self.packet_data)
-        if (frame.uncorrected_errors > 0 or frame.sync == False) and self.state != rx_state.SEARCH:
+        if (not frame.valid or frame.sync == False) and self.state != rx_state.SEARCH:
             if self.state == rx_state.RECEIVE and self.frame_errors == 0: # we might be able to recover using parity in this case we pad out the packet with blank bytes until we know what they are
                 self.frame_errors += 1
                 self.frame_error_location = len(self.packet_data)
@@ -206,7 +206,7 @@ class Rf():
                 header = True
                 frame.data = frame.data[2:] # strip off the header
             # we let the RECEIVE process directly after sync to handle the data sans the header
-        if self.state == rx_state.RECEIVE and (frame.uncorrected_errors == 0 and frame.sync == True):
+        if self.state == rx_state.RECEIVE and (frame.valid and frame.sync == True):
             if header != True:
                 self.rx_parity.add_block(frame.data)
             self.rx_frame_count += 1

@@ -5,9 +5,24 @@ from ctypes import *
 import logging
 import sys
 
+def crc_16(msg):
+    lo = hi = 0xff
+    mask = 0xff
+    for new in msg:
+        new ^= lo
+        new ^= (new << 4) & mask
+        tmp = new >> 5
+        lo = hi
+        hi = new ^ tmp
+        lo ^= (new << 3) & mask
+        lo ^= new >> 4
+    lo ^= mask
+    hi ^= mask
+    return hi << 8 | lo
+
 class Frame():
-    def __init__(self, uncorrected_errors: int, sync: bool, data: bytes):
-        self.uncorrected_errors = uncorrected_errors
+    def __init__(self,valid: bool, sync: bool, data: bytes):
+        self.valid = valid
         self.sync = sync
         self.data = data
 
@@ -27,20 +42,13 @@ class FreeDV():
         self.c_lib.freedv_get_bits_per_modem_frame.restype = c_int
         self.c_lib.freedv_get_n_nom_modem_samples.restype = c_int
 
-        self.c_lib.freedv_get_bits_per_modem_frame.restype = c_int
+
         self.c_lib.freedv_get_n_max_modem_samples.restype = c_int
 
         self.c_lib.freedv_nin.restype = c_int
 
         self.c_lib.freedv_get_sync.restype = c_int
 
-        # freedv_get_uncorrected_errors was renamed to freedv_get_total_packet_errors and ideally we want to support both for the moment
-        try:
-            self.freedv_get_uncorrected_errors = self.c_lib.freedv_get_uncorrected_errors
-        except AttributeError:
-            self.freedv_get_uncorrected_errors = self.c_lib.freedv_get_total_packet_errors
-        
-        self.freedv_get_uncorrected_errors.restype = c_int
 
         self.raw_sync = c_int()
         self.raw_snr = c_float()
@@ -54,7 +62,7 @@ class FreeDV():
         else:
             raise NotImplementedError("Only 700D is currently supported")
 
-        self.bytes_per_frame = int(self.c_lib.freedv_get_bits_per_modem_frame(self.freedv)/8)
+        self.bytes_per_frame = int(self.c_lib.freedv_get_bits_per_modem_frame(self.freedv)/8) - 2 # 2 bytes / 16 bits for crc checksum
 
         self.c_lib.freedv_rawdatarx.argtype = [POINTER(c_ubyte), self.FrameBytes(), self.ModulationIn()]
         self.c_lib.freedv_rawdatatx.argtype = [POINTER(c_ubyte), self.ModulationOut(), self.FrameBytes()]
@@ -86,7 +94,7 @@ class FreeDV():
         return (c_short * self.c_lib.freedv_get_n_nom_modem_samples(self.freedv))
 
     def FrameBytes(self):
-        return (c_ubyte * self.bytes_per_frame)
+        return (c_ubyte * int(self.c_lib.freedv_get_bits_per_modem_frame(self.freedv)/8) )
 
     def get_n_max_modem_samples(self) -> int:
         return int(self.c_lib.freedv_get_n_max_modem_samples(self.freedv))
@@ -108,20 +116,30 @@ class FreeDV():
         modulation = modulation.from_buffer_copy(buffer) # copy buffer across and get a pointer to it.
 
         bytes_out = self.FrameBytes()() # initilize a pointer to where bytes will be outputed
-        
+        bytes_out = bytes(bytes_out)
         self.c_lib.freedv_rawdatarx(self.freedv, bytes_out, modulation)
+
+        # Check checksum
+        provided_checksum = bytes_out[-2:]
+        bytes_out = bytes_out[:-2] 
+        calculated_checksum = crc_16(bytes_out).to_bytes(2, byteorder='big')
+        if provided_checksum == calculated_checksum:
+            valid = True
+        else:
+            if bool(self.c_lib.freedv_get_sync(self.freedv)) == True:
+                logging.debug(f"Invalid CRC: [SNR: {self.snr:.2f} SYNC: {self.sync}] {bytes(bytes_out).hex()}")
+            valid = False
 
         bytes_out = self.unscramble(bytes_out, packet_num) # Unscramble
 
         frame = Frame(
-            uncorrected_errors=int(self.freedv_get_uncorrected_errors(self.freedv)),
+            valid=valid,
             sync=bool(self.c_lib.freedv_get_sync(self.freedv)),
             data=bytes(bytes_out)
         )
 
         self.c_lib.freedv_get_modem_stats(self.freedv,byref(self.raw_sync), byref(self.raw_snr))
-        
-        if frame.sync == True and frame.uncorrected_errors == 0 and bytes_in != len(bytes_in) * b'\x00':
+        if frame.sync == True and frame.valid == 0 and bytes_in != len(bytes_in) * b'\x00':
             logging.debug(f"Demodulated: [SNR: {self.snr:.2f} SYNC: {self.sync}] {frame.data.hex()}")
 
        
@@ -140,6 +158,8 @@ class FreeDV():
 
         buffer = self.scramble(buffer, packet_num)
 
+        # Add Checksum
+        buffer += crc_16(buffer).to_bytes(2, byteorder='big')
         modulation = self.ModulationOut()() # new modulation object and get pointer to it
         
         mod_bytes = self.FrameBytes().from_buffer_copy(buffer)
