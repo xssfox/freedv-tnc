@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "freedvtnc"
-version = "0.3.4"
+version = "0.3.5"
 description = ""
 authors = ["xssfox"]
 license = "WTFPL"

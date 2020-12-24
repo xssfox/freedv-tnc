@@ -49,6 +49,8 @@ class FreeDV():
 
         if mode == "700D":
             self.freedv = self.c_lib.freedv_open(7)  #7 -  700D
+        elif mode == "700E":
+            self.freedv = self.c_lib.freedv_open(13)  #13 -  700E
         else:
             raise NotImplementedError("Only 700D is currently supported")
 
@@ -60,6 +62,9 @@ class FreeDV():
         base_scramble = b'\xbd\xe5\xa2\xd7\xa5\x72\x02\x3b\x86\x3d\xdd\x7b\xb5\xd8\xc4\x75'
                         # if the modem bytes per frame is larger than our preable we repeat, if not we truncate
         self.scramble_pattern = bytearray((base_scramble * max(1,int( self.bytes_per_frame/ len(base_scramble)+1)))[:self.bytes_per_frame])
+
+        # Enabling clipping
+        self.c_lib.freedv_set_clip(self.freedv, 1)
 
         logging.debug("Initialized FreeDV Modem")
 
