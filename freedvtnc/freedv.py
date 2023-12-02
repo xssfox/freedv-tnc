@@ -154,7 +154,7 @@ class FreeDV():
             new_nin = int(self.c_lib.freedv_nin(self.freedv))
         if self.nin != new_nin:
             logging.debug(f"Updated nin {new_nin}")
-        if self.nin == 0:
+        if snew_nin == 0:
             logging.debug(f"nin 0 for some reason, setting to 1 to get unstuck") # hack - need to fix
             new_nin = 1
         self.nin = new_nin
