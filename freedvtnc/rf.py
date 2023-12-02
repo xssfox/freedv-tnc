@@ -157,6 +157,7 @@ class Rf():
         self.tx_thread.start()
         logging.debug("Started TX Thread")
         self.rx_buffer = bytearray()
+        self.last_log = ""
 
     def rx(self):
         if type(self.stream_rx) == pyaudio.Stream:
@@ -169,34 +170,49 @@ class Rf():
         
         self.rx_buffer += bytearray(audio_sample)
         while (len(self.rx_buffer) > self.modem.nin *2):
+            
             nin_elements = int(self.modem.nin * 2)
             #logging.debug(f"nin: {self.modem.nin} nin_elements: {nin_elements}")
             audio_sample = bytes(self.rx_buffer[:nin_elements])
             del self.rx_buffer[:nin_elements]
             
-            if audio_sample == len(audio_sample) * b'\x00': #don't demodulate silence as that breaks the freedv modem
-                if self.rx_locked == True:
-                    self.rx_locked = False
-                    self.lock.release()  
-                continue     
-            else:
-                frame = self.modem.demodulate(audio_sample, self.rx_frame_count)
-                if not frame:
-                    continue
+            # if audio_sample == len(audio_sample) * b'\x00': #don't demodulate silence as that breaks the freedv modem
+            #     if self.rx_locked == True:
+            #         self.rx_locked = False
+            #         self.lock.release()  
+            #     continue     
+            # else:
+            frame = self.modem.demodulate(audio_sample, self.rx_frame_count)
+
+            # use the new rx_status to work out if we have real sync
+            sync = True
+            if frame.rx_status in [0, 3]:
+                sync = False
+
+            log = f"{self.state.name} : {sync} : {frame.rx_status}"
+            if self.last_log != log:
+                self.last_log = log
+                logging.debug(log)
             
+
+
             # RX statemachine
             # If we are in search mode we are looking for preambles
             header = False
-
+            if frame.count == 0 and sync == True:
+                #logging.debug("skip this frame - we are inbetween demodulations")
+                continue
             if self.state == rx_state.SEARCH:
-                if frame.data == self.preamble and frame.valid and frame.sync == True:
+                if frame.data == self.preamble and frame.valid:
                     logging.debug(f"PREAMBLE: {frame.data.hex()}")
                     self.state = rx_state.SYNC # the next frame could be a packet
                     logging.debug("RX STATE -> SYNC: Preamble found, waiting for header")
                     self.rx_frame_count = 0
+                elif frame.valid:
+                    logging.debug(f"SEARCH: Found frame but not preamble {frame.data.hex()}")
             if self.state == rx_state.RECOVER:
                 self.rx_frame_count = 0
-                if (not frame.valid or frame.sync == False):
+                if (not frame.valid or sync == False):
                     logging.debug(f"Parity block not received - could not recover")
                     self.state = rx_state.SEARCH
                 else:
@@ -215,7 +231,7 @@ class Rf():
                     logging.info(f"RXed Packet: {self.packet_data}")
                     logging.info(f"RXed Packet HEX: {self.packet_data.hex()}")
                     self.callback(self.packet_data)
-            if (not frame.valid or frame.sync == False) and self.state != rx_state.SEARCH:
+            if (not frame.valid or sync == False) and self.state != rx_state.SEARCH:
                 if self.state == rx_state.RECEIVE and self.frame_errors == 0: # we might be able to recover using parity in this case we pad out the packet with blank bytes until we know what they are
                     self.frame_errors += 1
                     self.frame_error_location = len(self.packet_data)
@@ -248,7 +264,7 @@ class Rf():
                     header = True
                     frame.data = frame.data[2:] # strip off the header
                 # we let the RECEIVE process directly after sync to handle the data sans the header
-            if self.state == rx_state.RECEIVE and (frame.valid and frame.sync == True):
+            if self.state == rx_state.RECEIVE and (frame.valid and sync == True):
                 if header != True:
                     self.rx_parity.add_block(frame.data)
                 self.rx_frame_count += 1
@@ -273,14 +289,14 @@ class Rf():
 
 
 
-            if self.modem.sync == False and self.rx_locked == True:
+            if sync == False and self.rx_locked == True:
                 try:
                     self.rx_locked = False
                     self.lock.release()
                     logging.debug("Unlocked TX")
                 except RuntimeError:
                     pass
-            elif self.modem.sync == True and self.rx_locked == False:
+            elif sync == True and self.rx_locked == False:
                 self.rx_locked = self.lock.acquire(blocking=False)
                 if self.rx_locked:
                     logging.debug("Inhibited TX as possible RX")

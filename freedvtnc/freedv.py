@@ -26,10 +26,12 @@ lock = Lock()
 #     return hi << 8 | lo
 
 class Frame():
-    def __init__(self,valid: bool, sync: bool, data: bytes):
+    def __init__(self,valid: bool, sync: bool, data: bytes, count: int, rx_status: int):
         self.valid = valid
         self.sync = sync
         self.data = data
+        self.count = count
+        self.rx_status = rx_status
 
 class FreeDV():
     def __init__(self,mode="700D", libpath=f"libcodec2"):
@@ -54,7 +56,11 @@ class FreeDV():
 
         self.c_lib.freedv_nin.restype = c_int
 
+        self.c_lib.freedv_get_sync.argtype = POINTER(c_ubyte)
         self.c_lib.freedv_get_sync.restype = c_int
+
+        self.c_lib.freedv_get_rx_status.argtype = POINTER(c_ubyte)
+        self.c_lib.freedv_get_rx_status.restype = c_int
 
 
         self.raw_sync = c_int()
@@ -93,8 +99,8 @@ class FreeDV():
         logging.debug(f"Opened mode {self.reported_mode} with samplerate {self.modem_sample_rate}")
 
 
-        # self.c_lib.freedv_set_verbose.argtype = [POINTER(c_ubyte), c_int]
-        # self.c_lib.freedv_set_verbose(self.freedv, 1)
+        self.c_lib.freedv_set_verbose.argtype = [POINTER(c_ubyte), c_int]
+        self.c_lib.freedv_set_verbose(self.freedv, 1)
 
         self.bytes_per_frame = int(self.c_lib.freedv_get_bits_per_modem_frame(self.freedv)/8) - 2 # 2 bytes / 16 bits for crc checksum
         logging.debug(f"Usable bytes per frame {self.bytes_per_frame}")
@@ -122,6 +128,10 @@ class FreeDV():
         self.mod_out = self.ModulationOut()()
         self.din = self.FrameBytes()()
         self.dout = self.FrameBytes()()
+
+    @property
+    def rx_status(self):
+        return self.c_lib.freedv_get_rx_status(self.freedv)
         
     @property
     def snr(self):
@@ -171,34 +181,37 @@ class FreeDV():
             self.c_lib.freedv_get_modem_stats(self.freedv,byref(self.raw_sync), byref(self.raw_snr))
             sync = bool(self.c_lib.freedv_get_sync(self.freedv))
         self.update_nin()
-        if not bytes_rxd and sync == True:
-            return None
+        # if not bytes_rxd:
+        #     return None
         
-        logging.debug(f"RXd: {bytes_rxd}")
+        #logging.debug(f"RXd: {bytes_rxd}")
         bytes_out = bytes(self.dout)
         # Check checksum
         provided_checksum = bytes_out[-2:]
         bytes_out = bytes_out[:-2] 
         calculated_checksum = self.CRC(bytes_out)
-        if provided_checksum == calculated_checksum:
+        if provided_checksum == calculated_checksum and bytes_rxd:
             valid = True
-            logging.debug(f"Valid CRC: [SNR: {self.snr:.2f} SYNC: {self.sync}] {self.unscramble(bytes_out, packet_num).hex()}")
+            #logging.debug(f"Valid CRC: [SNR: {self.snr:.2f} SYNC: {self.sync}] {self.unscramble(bytes_out, packet_num).hex()}")
         else:
             with lock:
-                if sync == True:
+                if sync == True and bytes_rxd:
                     logging.debug(f"Invalid CRC: [SNR: {self.snr:.2f} SYNC: {self.sync}] {bytes_out.hex()}{provided_checksum.hex()} {calculated_checksum.hex()}")
             valid = False
         bytes_out = self.unscramble(bytes_out, packet_num) # Unscramble
 
-        with lock:
-            frame = Frame(
-                valid=valid,
-                sync=sync,
-                data=bytes(bytes_out)
-            )
+        if bytes_rxd == 0:
+            valid = False
+        frame = Frame(
+            valid=valid,
+            sync=sync,
+            data=bytes(bytes_out),
+            count=bytes_rxd,
+            rx_status=self.rx_status
+        )
 
             
-        if frame.sync == True and frame.valid == 0 and bytes_in != len(bytes_in) * b'\x00':
+        if frame.valid == 0 and bytes_in != len(bytes_in) * b'\x00' and bytes_rxd:
             logging.debug(f"Demodulated: [SNR: {self.snr:.2f} SYNC: {self.sync}] {frame.data.hex()}")
 
        
