@@ -212,16 +212,13 @@ class FreeDV():
         buffer = bytearray(self.bytes_per_frame+2) # pad out the frame if it's too short
         buffer[:len(bytes_in)] = bytes_in
         
-        buffer = self.scramble(buffer, packet_num)
+        buffer[:-2] = self.scramble(buffer[:-2], packet_num)
 
         # Add Checksum
         #buffer += crc_16(buffer).to_bytes(2, byteorder='big')
         #buffer += b"\x00\x00"
         self.din[:] = buffer
         crc = self.CRC(self.din)
-        logging.debug("--")
-        logging.debug(crc)
-        logging.debug("--")
         self.din[-2] = crc[0]
         self.din[-1] = crc[1]
         #logging.debug(f"dout:{object.__repr__(self.dout)} mod_in:{object.__repr__(self.mod_in)} din:{object.__repr__(self.din)} mod_out:{object.__repr__(self.mod_out)}")
@@ -234,7 +231,6 @@ class FreeDV():
         return bytes(self.mod_out)
 
     def scramble(self, bytes_in, packet_num=0):
-        return bytes_in
         output = bytearray(len(bytes_in))
         scramble_pattern = self.scramble_pattern[packet_num:] + self.scramble_pattern[:packet_num]
         for index, single_byte in enumerate(bytearray(bytes_in)):
