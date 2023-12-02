@@ -132,7 +132,7 @@ class FreeDV():
         return bool(self.raw_sync.value)
 
     def CRC(self, frame_in):
-        crc = self.c_lib.freedv_gen_crc16(frame_in,self.bytes_per_frame).to_bytes(2)
+        crc = self.c_lib.freedv_gen_crc16(frame_in,self.bytes_per_frame).to_bytes(2, byteorder="big")
         return bytes(crc)
         
     def ModulationIn(self):
@@ -154,6 +154,9 @@ class FreeDV():
             new_nin = int(self.c_lib.freedv_nin(self.freedv))
         if self.nin != new_nin:
             logging.debug(f"Updated nin {new_nin}")
+        if self.nin == 0:
+            logging.debug(f"nin 0 for some reason, setting to 1 to get unstuck") # hack - need to fix
+            new_nin = 1
         self.nin = new_nin
 
     def demodulate(self, bytes_in: bytes, packet_num=0) -> bytes:
