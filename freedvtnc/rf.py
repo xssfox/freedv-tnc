@@ -157,7 +157,6 @@ class Rf():
         self.tx_thread.start()
         logging.debug("Started TX Thread")
         self.rx_buffer = bytearray()
-        self.tx_a_buffer = bytearray()
 
     def rx(self):
         if type(self.stream_rx) == pyaudio.Stream:
@@ -182,6 +181,8 @@ class Rf():
                 continue     
             else:
                 frame = self.modem.demodulate(audio_sample, self.rx_frame_count)
+                if not frame:
+                    continue
             
             # RX statemachine
             # If we are in search mode we are looking for preambles
@@ -350,15 +351,8 @@ class Rf():
             modulated_frame = audioop.tostereo(modulated_frame, 2, 1, 1)
         (modulated_frame, self.tx_sample_state) = audioop.ratecv(modulated_frame,2,1,self.modem_sample_rate, self.audio_sample_rate, self.tx_sample_state)
         logging.debug("ready to send")
-        self.tx_a_buffer += bytearray(modulated_frame)
-        print(len(self.tx_a_buffer))
-        while (len(self.tx_a_buffer) > 2048):
-            print(len(self.tx_a_buffer))
-            audio_sample = bytes(self.tx_a_buffer[:2048])
-            del self.tx_a_buffer[:2048]
-            self.stream_tx.write(audio_sample)
+        self.stream_tx.write(bytes(modulated_frame))
         logging.debug("send to sound device")
-        print(len(self.tx_a_buffer))
 
     class ParityBlock():
         def __init__(self):

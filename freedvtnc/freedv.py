@@ -10,20 +10,20 @@ from threading import Lock
 
 lock = Lock()
 
-def crc_16(msg):
-    lo = hi = 0xff
-    mask = 0xff
-    for new in msg:
-        new ^= lo
-        new ^= (new << 4) & mask
-        tmp = new >> 5
-        lo = hi
-        hi = new ^ tmp
-        lo ^= (new << 3) & mask
-        lo ^= new >> 4
-    lo ^= mask
-    hi ^= mask
-    return hi << 8 | lo
+# def crc_16(msg):
+#     lo = hi = 0xff
+#     mask = 0xff
+#     for new in msg:
+#         new ^= lo
+#         new ^= (new << 4) & mask
+#         tmp = new >> 5
+#         lo = hi
+#         hi = new ^ tmp
+#         lo ^= (new << 3) & mask
+#         lo ^= new >> 4
+#     lo ^= mask
+#     hi ^= mask
+#     return hi << 8 | lo
 
 class Frame():
     def __init__(self,valid: bool, sync: bool, data: bytes):
@@ -93,8 +93,8 @@ class FreeDV():
         logging.debug(f"Opened mode {self.reported_mode} with samplerate {self.modem_sample_rate}")
 
 
-        self.c_lib.freedv_set_verbose.argtype = [POINTER(c_ubyte), c_int]
-        self.c_lib.freedv_set_verbose(self.freedv, 1)
+        # self.c_lib.freedv_set_verbose.argtype = [POINTER(c_ubyte), c_int]
+        # self.c_lib.freedv_set_verbose(self.freedv, 1)
 
         self.bytes_per_frame = int(self.c_lib.freedv_get_bits_per_modem_frame(self.freedv)/8) - 2 # 2 bytes / 16 bits for crc checksum
         logging.debug(f"Usable bytes per frame {self.bytes_per_frame}")
@@ -107,7 +107,11 @@ class FreeDV():
         self.scramble_pattern = bytearray((base_scramble * max(1,int( self.bytes_per_frame/ len(base_scramble)+1)))[:self.bytes_per_frame])
 
         # Enabling clipping
-        self.c_lib.freedv_set_clip(self.freedv, 1)
+        #self.c_lib.freedv_set_clip(self.freedv, 1)
+
+        self.c_lib.freedv_gen_crc16.argtype = [POINTER(self.FrameBytes()), c_int]
+        self.c_lib.freedv_gen_crc16.restype = c_ushort
+
 
         logging.debug(f"Initialized FreeDV Modem {self.bytes_per_frame + 2}")
 
@@ -126,12 +130,16 @@ class FreeDV():
     @property
     def sync(self):
         return bool(self.raw_sync.value)
+
+    def CRC(self, frame_in):
+        crc = self.c_lib.freedv_gen_crc16(frame_in,self.bytes_per_frame).to_bytes(2)
+        return bytes(crc)
         
     def ModulationIn(self):
-        return (c_short * (self.c_lib.freedv_get_n_max_modem_samples(self.freedv)))
+        return (c_short * self.c_lib.freedv_get_n_max_modem_samples(self.freedv))
 
     def ModulationOut(self):
-        return (c_short * self.c_lib.freedv_get_n_tx_modem_samples(self.freedv))
+        return (c_short * (self.c_lib.freedv_get_n_tx_modem_samples(self.freedv)))
 
     def FrameBytes(self):
         return (c_ubyte * int(self.c_lib.freedv_get_bits_per_modem_frame(self.freedv)/8))
@@ -157,18 +165,24 @@ class FreeDV():
         self.mod_in[:] = struct.unpack('H'*(int(len(buffer)/2)) , buffer)
         with lock:
             bytes_rxd = self.c_lib.freedv_rawdatarx(self.freedv, self.dout, self.mod_in)
-            logging.debug(f"RXd: {bytes_rxd}")
+            self.c_lib.freedv_get_modem_stats(self.freedv,byref(self.raw_sync), byref(self.raw_snr))
+            sync = bool(self.c_lib.freedv_get_sync(self.freedv))
+        self.update_nin()
+        if not bytes_rxd and sync == True:
+            return None
+        
+        logging.debug(f"RXd: {bytes_rxd}")
         bytes_out = bytes(self.dout)
         # Check checksum
         provided_checksum = bytes_out[-2:]
         bytes_out = bytes_out[:-2] 
-        calculated_checksum = crc_16(bytes_out).to_bytes(2, byteorder='big')
+        calculated_checksum = self.CRC(bytes_out)
         if provided_checksum == calculated_checksum:
             valid = True
             logging.debug(f"Valid CRC: [SNR: {self.snr:.2f} SYNC: {self.sync}] {self.unscramble(bytes_out, packet_num).hex()}")
         else:
             with lock:
-                if bool(self.c_lib.freedv_get_sync(self.freedv)) == True:
+                if sync == True:
                     logging.debug(f"Invalid CRC: [SNR: {self.snr:.2f} SYNC: {self.sync}] {bytes_out.hex()}{provided_checksum.hex()} {calculated_checksum.hex()}")
             valid = False
         bytes_out = self.unscramble(bytes_out, packet_num) # Unscramble
@@ -176,17 +190,17 @@ class FreeDV():
         with lock:
             frame = Frame(
                 valid=valid,
-                sync=bool(self.c_lib.freedv_get_sync(self.freedv)),
+                sync=sync,
                 data=bytes(bytes_out)
             )
 
-            self.c_lib.freedv_get_modem_stats(self.freedv,byref(self.raw_sync), byref(self.raw_snr))
+            
         if frame.sync == True and frame.valid == 0 and bytes_in != len(bytes_in) * b'\x00':
             logging.debug(f"Demodulated: [SNR: {self.snr:.2f} SYNC: {self.sync}] {frame.data.hex()}")
 
        
     
-        self.update_nin()
+        
 
         return frame
 
@@ -195,22 +209,32 @@ class FreeDV():
         if len(bytes_in) > self.bytes_per_frame:
             raise AttributeError(f"bytes_in ({len(bytes_in)}) > than bytes_per_frame({self.bytes_per_frame}) supported by this mode")
         
-        buffer = bytearray(self.bytes_per_frame) # pad out the frame if it's too short
+        buffer = bytearray(self.bytes_per_frame+2) # pad out the frame if it's too short
         buffer[:len(bytes_in)] = bytes_in
-
+        
         buffer = self.scramble(buffer, packet_num)
 
         # Add Checksum
-        buffer += crc_16(buffer).to_bytes(2, byteorder='big')
-        #logging.debug(f"dout:{object.__repr__(self.dout)} mod_in:{object.__repr__(self.mod_in)} din:{object.__repr__(self.din)} mod_out:{object.__repr__(self.mod_out)}")
+        #buffer += crc_16(buffer).to_bytes(2, byteorder='big')
+        #buffer += b"\x00\x00"
         self.din[:] = buffer
+        crc = self.CRC(self.din)
+        logging.debug("--")
+        logging.debug(crc)
+        logging.debug("--")
+        self.din[-2] = crc[0]
+        self.din[-1] = crc[1]
+        #logging.debug(f"dout:{object.__repr__(self.dout)} mod_in:{object.__repr__(self.mod_in)} din:{object.__repr__(self.din)} mod_out:{object.__repr__(self.mod_out)}")
+        
         logging.debug("Calling lib")
+        logging.debug(bytes(self.din).hex())
         with lock:
             self.c_lib.freedv_rawdatatx(self.freedv,self.mod_out,self.din)
         logging.debug("Returned")
         return bytes(self.mod_out)
 
     def scramble(self, bytes_in, packet_num=0):
+        return bytes_in
         output = bytearray(len(bytes_in))
         scramble_pattern = self.scramble_pattern[packet_num:] + self.scramble_pattern[:packet_num]
         for index, single_byte in enumerate(bytearray(bytes_in)):
