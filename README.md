@@ -1,3 +1,6 @@
+> [!IMPORTANT]  
+>  FreeDV-TNC has been been superseded by [freedvtnc2](http://github.com/xssfox/freedvtnc2). No further development work will happen on FreeDV-TNC.
+
 FreeDV-TNC
 ==
 
