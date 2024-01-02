@@ -16,7 +16,7 @@ def main():
 
     parser = argparse.ArgumentParser(description='FreeDV Data Modem TNC')
 
-    parser.add_argument('--modem', dest="modem", default="700D", choices=['700D', '700E'], help="The FreeDV Modem to use.", type=str)
+    parser.add_argument('--modem', dest="modem", default="700D", choices=['700D', '700E', 'DATAC0', 'DATAC1', 'DATAC3', 'DATAC4', 'DATAC13', 'FSK_LDPC'], help="The FreeDV Modem to use.", type=str)
     parser.add_argument('--rx-sound-device', dest="rx_sound_device", default=False, help="The sound card used to rx. Use --list-sound-devices and either use the name or the number of the device. Set to stdin to use stdin.", type=str)
     parser.add_argument('--tx-sound-device', dest="tx_sound_device", default=False, help="The sound card used to tx. Use --list-sound-devices and either use the name or the number of the device. Set to stdout to use stdout.", type=str)
     parser.add_argument('--list-sound-devices', dest="list_sound_devices", action='store_true', help="List audio devices")
@@ -75,7 +75,7 @@ def main():
         logger.setLevel(logging.INFO)
 
     try:
-        modem = freedv.FreeDV()
+        modem = freedv.FreeDV(mode=args.modem)
     except OSError:
         logger.error("Could not find libcodec2 - please ensure it's installed and ldconfig has been run")
         sys.exit(0)

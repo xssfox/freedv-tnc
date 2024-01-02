@@ -26,13 +26,13 @@ class Rigctld():
     def connect(self):
         """ Connect to rotctld instance """
         self.sock.connect((self.hostname,self.port))
-        model = self.get_model()
-        if model == None:
-            # Timeout!
-            self.close()
-            raise Exception("Timeout!")
-        else:
-            return model
+        # model = self.get_model()
+        # if model == None:
+        #     # Timeout!
+        #     self.close()
+        #     raise Exception("Timeout!")
+        # else:
+        #     return model
 
 
     def close(self):
